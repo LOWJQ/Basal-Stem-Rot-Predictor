@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import os
 import cv2
 import numpy as np
@@ -9,14 +10,31 @@ from services.risk_analysis import generate_risk_map, generate_heatmap_grid
 from services.visualization import draw_heatmap
 
 app = Flask(__name__)
+CORS(app)
 
 BASE_DIR = os.path.dirname(__file__)
 
-@app.route("/", methods=["POST"])
+
+# Home route (for testing API)
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({
+        "status": "API is running",
+        "endpoint": "/predict (POST)"
+    })
+
+
+# Prediction route
+@app.route("/predict", methods=["GET", "POST"])
 def predict():
     temp_path = None
 
     try:
+        if request.method == "GET":
+            return jsonify({
+                "message": "Send a POST request with an image file using key 'image'"
+            })
+
         file = request.files.get("image")
 
         if not file:
@@ -35,9 +53,7 @@ def predict():
         cv2.imwrite(temp_path, img)
 
         infected_points = detect_infected(temp_path)
-
         risk_map = generate_risk_map(infected_points, width, height)
-
         heatmap = generate_heatmap_grid(risk_map)
 
         output_name = f"output_{uuid.uuid4().hex}.jpg"
