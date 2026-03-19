@@ -1,0 +1,6 @@
+.git/
+
+*.pt
+backend/output/
+backend/*.jpg
+backend/*.png
