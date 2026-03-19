@@ -5,7 +5,7 @@ import numpy as np
 import uuid
 
 from services.image_processing import detect_infected
-from services.risk_analysis import generate_heatmap
+from services.risk_analysis import generate_risk_map, generate_heatmap_grid
 from services.visualization import draw_heatmap
 
 app = Flask(__name__)
@@ -36,17 +36,19 @@ def predict():
 
         infected_points = detect_infected(temp_path)
 
-        heatmap = generate_heatmap(infected_points, width, height)
+        risk_map = generate_risk_map(infected_points, width, height)
+
+        heatmap = generate_heatmap_grid(risk_map)
 
         output_name = f"output_{uuid.uuid4().hex}.jpg"
         output_path = os.path.join(BASE_DIR, "output", "heatmap", output_name)
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        output_image = draw_heatmap(temp_path, infected_points, output_path)
+        output_image = draw_heatmap(temp_path, risk_map, infected_points, output_path)
 
         if output_image is None:
             return jsonify({"error": "Failed to process image"}), 400
-      
+
         return jsonify({
             "heatmap": heatmap,
             "infected_points": infected_points,
@@ -57,10 +59,11 @@ def predict():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
     finally:
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
+
 
 if __name__ == "__main__":
     app.run(debug=True)

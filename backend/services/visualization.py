@@ -2,39 +2,16 @@ import cv2
 import numpy as np
 import os
 
-def draw_heatmap(image_path, infected_points, output_path):
+def draw_heatmap(image_path, risk_map, infected_points, output_path):
 
     img = cv2.imread(image_path)
 
     if img is None:
         raise ValueError("Invalid image path")
 
-    h, w = img.shape[:2]
+    heatmap = np.clip(risk_map, 0, 1)
 
-    heatmap = np.zeros((h, w), dtype=np.float32)
-
-    y_coords, x_coords = np.meshgrid(np.arange(h), np.arange(w), indexing='ij')
-
-    for point in infected_points:
-        cx = float(point["x"])
-        cy = float(point["y"])
-        conf = float(point["conf"])
-
-        spread = 70 + (conf * 80)
-
-        dist_sq = (x_coords - cx) ** 2 + (y_coords - cy) ** 2
-
-        influence = conf * np.exp(-dist_sq / (2 * spread ** 2))
-
-        heatmap += np.clip(influence, 0, 1)
-
-    min_val = np.min(heatmap)
-    max_val = np.max(heatmap)
-
-    if max_val > min_val:
-        heatmap = (heatmap - min_val) / (max_val - min_val)
-
-    heatmap = np.power(heatmap, 0.5)
+    heatmap = np.power(heatmap, 0.6)
 
     heatmap = (heatmap * 255).astype(np.uint8)
 
@@ -51,6 +28,7 @@ def draw_heatmap(image_path, infected_points, output_path):
     cv2.imwrite(output_path, overlay)
 
     return output_path
+
 
 def apply_custom_colormap(heatmap):
     heatmap = heatmap.astype(np.float32) / 255.0

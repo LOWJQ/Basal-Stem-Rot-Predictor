@@ -1,3 +1,6 @@
+import numpy as np
+import math
+
 def calculate_risk(x, y, infected_points):
 
     if len(infected_points) == 0:
@@ -9,21 +12,21 @@ def calculate_risk(x, y, infected_points):
     for point in infected_points:
         dx = x - point["x"]
         dy = y - point["y"]
-        dist = (dx**2 + dy**2) ** 0.5
+        dist = math.sqrt(dx**2 + dy**2)
 
-        dist = float(max(dist, 20))
+        dist = max(dist, 1)
 
         if dist < min_dist:
             min_dist = dist
 
-        influence = point["conf"] / dist
+        influence = point["conf"] * np.exp(-dist / 120) * (1 + 0.5 / (dist + 1))
         total_risk += influence
 
-    score = 1 - (1 / (1 + total_risk))
+    score = min(total_risk, 1.0)
 
-    if score > 0.66:
+    if score > 0.6:
         level = "High"
-    elif score > 0.33:
+    elif score > 0.3:
         level = "Medium"
     else:
         level = "Low"
@@ -31,50 +34,71 @@ def calculate_risk(x, y, infected_points):
     return level, score, min_dist
 
 
-def generate_heatmap(infected_points, width, height, grid_size=6):
-    heatmap = []
+def generate_risk_map(infected_points, width, height):
 
-    cell_w = width / grid_size
-    cell_h = height / grid_size
+    y_coords, x_coords = np.meshgrid(
+        np.arange(height), np.arange(width), indexing='ij'
+    )
+
+    risk_map = np.zeros((height, width), dtype=np.float32)
+
+    for point in infected_points:
+        cx = float(point["x"])
+        cy = float(point["y"])
+        conf = float(point["conf"]) * 2.0
+
+        dx = x_coords - cx
+        dy = y_coords - cy
+        dist = np.sqrt(dx**2 + dy**2)
+
+        dist = np.maximum(dist, 1)
+
+        influence = conf * (
+            np.exp(-dist / 100) +
+            0.25 * np.exp(-dist / 25)
+        )
+
+        risk_map += influence
+
+    risk_map = np.clip(risk_map, 0, 1)
+
+    return risk_map
+
+
+def generate_heatmap_grid(risk_map, grid_size=6):
+
+    h, w = risk_map.shape
+
+    cell_h = h // grid_size
+    cell_w = w // grid_size
+
+    heatmap = []
 
     for i in range(grid_size):
         row = []
         for j in range(grid_size):
 
-            x = (j + 0.5) * cell_w
-            y = (i + 0.5) * cell_h
+            y1 = i * cell_h
+            y2 = (i + 1) * cell_h
+            x1 = j * cell_w
+            x2 = (j + 1) * cell_w
 
-            total_risk = 0
-            min_dist = float("inf")
+            cell = risk_map[y1:y2, x1:x2]
 
-            for point in infected_points:
-                dx = x - point["x"]
-                dy = y - point["y"]
-                dist = (dx**2 + dy**2) ** 0.5
+            score = float(np.percentile(cell, 90))
 
-                dist = float(max(dist, 20))
-
-                influence = 1 / dist
-                total_risk += influence
-
-                if dist < min_dist:
-                    min_dist = dist
-
-            score = 1 - (1 / (1 + total_risk))
-
-            if score < 0.3:
-                level = "low"
-            elif score < 0.6:
+            if score > 0.6:
+                level = "high"
+            elif score > 0.3:
                 level = "medium"
             else:
-                level = "high"
+                level = "low"
 
             row.append({
-                "x": x,
-                "y": y,
+                "x": (x1 + x2) / 2,
+                "y": (y1 + y2) / 2,
                 "risk": level,
-                "risk_score": score,
-                "distance": min_dist if min_dist != float("inf") else None
+                "risk_score": score
             })
 
         heatmap.append(row)
