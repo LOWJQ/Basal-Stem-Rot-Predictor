@@ -10,6 +10,10 @@ model = None
 def get_model():
     global model
     if model is None:
+        if not os.path.exists(MODEL_PATH):
+            raise FileNotFoundError(
+                "Model not found. Please download model1.pt and place it in backend/model/"
+            )
         model = YOLO(MODEL_PATH)
     return model
 
