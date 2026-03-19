@@ -11,7 +11,7 @@ def draw_heatmap(image_path, risk_map, infected_points, output_path):
 
     heatmap = np.clip(risk_map, 0, 1)
 
-    heatmap = np.power(heatmap, 0.6)
+    heatmap = np.power(heatmap, 0.5)
 
     heatmap = (heatmap * 255).astype(np.uint8)
 
