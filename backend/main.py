@@ -12,7 +12,7 @@ app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(__file__)
 
-@app.route("/predict", methods=["POST"])
+@app.route("/", methods=["POST"])
 def predict():
     temp_path = None
 
