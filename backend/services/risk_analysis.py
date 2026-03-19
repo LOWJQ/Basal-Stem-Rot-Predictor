@@ -1,5 +1,4 @@
 import numpy as np
-import math
 
 def generate_risk_map(infected_points, width, height):
 
