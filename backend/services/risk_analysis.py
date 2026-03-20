@@ -30,13 +30,12 @@ def generate_risk_map(infected_points, width, height):
 
     return risk_map
 
-
 def generate_heatmap_grid(risk_map, grid_size=6):
 
     h, w = risk_map.shape
 
-    cell_h = h // grid_size
-    cell_w = w // grid_size
+    cell_h = max(1, h // grid_size)
+    cell_w = max(1, w // grid_size)
 
     heatmap = []
 
@@ -45,13 +44,18 @@ def generate_heatmap_grid(risk_map, grid_size=6):
         for j in range(grid_size):
 
             y1 = i * cell_h
-            y2 = (i + 1) * cell_h
+            y2 = (i + 1) * cell_h if i < grid_size - 1 else h
             x1 = j * cell_w
-            x2 = (j + 1) * cell_w
+            x2 = (j + 1) * cell_w if j < grid_size - 1 else w
 
             cell = risk_map[y1:y2, x1:x2]
 
-            score = float(np.percentile(cell, 90))
+            if cell.size == 0:
+                score = 0.0
+            else:
+                score = float(np.percentile(cell, 90))   
+
+            score = max(0.0, min(score, 1.0))
 
             if score > 0.6:
                 level = "high"
@@ -64,7 +68,12 @@ def generate_heatmap_grid(risk_map, grid_size=6):
                 "x": (x1 + x2) / 2,
                 "y": (y1 + y2) / 2,
                 "risk": level,
-                "risk_score": score
+                "risk_score": score,
+                "factors": {
+                    "soil_moisture": 0.7,
+                    "humidity": 0.8,
+                    "temperature": 30
+                }
             })
 
         heatmap.append(row)

@@ -14,8 +14,6 @@ CORS(app)
 
 BASE_DIR = os.path.dirname(__file__)
 
-
-# Home route (for testing API)
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({
@@ -23,8 +21,6 @@ def home():
         "endpoint": "/predict (POST)"
     })
 
-
-# Prediction route
 @app.route("/predict", methods=["GET", "POST"])
 def predict():
     temp_path = None
@@ -39,6 +35,11 @@ def predict():
 
         if not file:
             return jsonify({"error": "No image uploaded"}), 400
+        
+        ALLOWED_TYPES = ["image/jpeg", "image/png"]
+
+        if file.mimetype not in ALLOWED_TYPES:
+            return jsonify({"error": "Invalid image type"}), 400
 
         file_bytes = np.frombuffer(file.read(), np.uint8)
         img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
@@ -66,11 +67,16 @@ def predict():
             return jsonify({"error": "Failed to process image"}), 400
 
         return jsonify({
-            "heatmap": heatmap,
-            "infected_points": infected_points,
-            "image_width": width,
-            "image_height": height,
-            "output_image": output_image
+            "status": "success",
+            "data": {
+                "image_size": {
+                    "width": width,
+                    "height": height
+                },
+                "infected_points": infected_points,
+                "heatmap": heatmap,
+                "output_image": output_image
+            }
         })
 
     except Exception as e:

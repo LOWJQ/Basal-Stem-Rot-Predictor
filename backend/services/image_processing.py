@@ -14,7 +14,10 @@ def get_model():
             raise FileNotFoundError(
                 "Model not found. Please download model1.pt and place it in backend/model/"
             )
-        model = YOLO(MODEL_PATH)
+        try:
+            model = YOLO(MODEL_PATH)
+        except Exception as e:
+            raise RuntimeError(f"Failed to load model: {str(e)}")
     return model
 
 def detect_infected(image_path):
