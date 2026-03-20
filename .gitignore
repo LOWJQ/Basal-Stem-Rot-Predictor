@@ -1,5 +1,7 @@
 .git/
 
+__pycache__/
+
 # Detection Model
 *.pt
 
