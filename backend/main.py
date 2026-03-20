@@ -8,6 +8,7 @@ import uuid
 from services.image_processing import detect_infected
 from services.risk_analysis import generate_risk_map, generate_heatmap_grid
 from services.visualization import draw_heatmap
+from services.environmental_data import get_environmental_data
 
 app = Flask(__name__)
 CORS(app)
@@ -25,11 +26,25 @@ def home():
 def predict():
     temp_path = None
 
+    lat = request.form.get("lat")
+    lon = request.form.get("lon")
+
+    if not lat or not lon:
+        lat, lon = 3.1390, 101.6869  # Kuala Lumpur
+    else:
+        try:
+            lat = float(lat)
+            lon = float(lon)
+        except:
+            return jsonify({"error": "Invalid latitude/longitude"}), 400
+
     try:
         if request.method == "GET":
             return jsonify({
                 "message": "Send a POST request with an image file using key 'image'"
             })
+        
+        env_data = get_environmental_data(lat, lon)
 
         file = request.files.get("image")
 
@@ -40,8 +55,20 @@ def predict():
 
         if file.mimetype not in ALLOWED_TYPES:
             return jsonify({"error": "Invalid image type"}), 400
+        
+        from PIL import Image
 
+        try:
+            file.stream.seek(0)
+            img_test = Image.open(file.stream)
+            img_test.verify()
+            file.stream.seek(0)
+        except:
+            return jsonify({"error": "Corrupted image file"}), 400
+
+        file.stream.seek(0)
         file_bytes = np.frombuffer(file.read(), np.uint8)
+
         img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
         if img is None:
@@ -75,6 +102,7 @@ def predict():
                 },
                 "infected_points": infected_points,
                 "heatmap": heatmap,
+                "environment": env_data,
                 "output_image": output_image
             }
         })

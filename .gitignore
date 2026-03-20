@@ -1,6 +1,12 @@
 .git/
 
+# Detection Model
 *.pt
+
+# Temporary files
 backend/output/
 backend/*.jpg
 backend/*.png
+
+# Environment variables
+.env
