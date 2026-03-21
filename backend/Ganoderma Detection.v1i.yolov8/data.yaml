@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 1
+names: ['Ganoderma']
+
+roboflow:
+  workspace: lows-workspace-2dhhu
+  project: ganoderma-detection-rjj2k
+  version: 1
+  license: Public Domain
+  url: https://universe.roboflow.com/lows-workspace-2dhhu/ganoderma-detection-rjj2k/dataset/1
