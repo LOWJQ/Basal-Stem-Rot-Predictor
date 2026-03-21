@@ -100,7 +100,7 @@ def predict():
 
         risk_map = generate_risk_map(infected_points, width, height, env_grid)
         
-        heatmap = generate_heatmap_grid(risk_map, env_grid)
+        heatmap = generate_heatmap_grid(risk_map, env_grid, infected_points, grid_coords)
 
         output_name = f"output_{uuid.uuid4().hex}.jpg"
         output_path = os.path.join(BASE_DIR, "output", "heatmap", output_name)

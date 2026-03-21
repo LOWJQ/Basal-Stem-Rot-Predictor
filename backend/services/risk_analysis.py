@@ -16,7 +16,7 @@ def calculate_env_risk(env):
     humidity_score = 1 - abs(humidity - 80) / 40
     humidity_score = max(0, min(humidity_score, 1))
 
-    soil_score = (soil - 0.1) / (0.5 - 0.1)
+    soil_score = (soil - 0.1) / (0.25 - 0.1)
     soil_score = max(0.1, min(soil_score, 1))
 
     env_risk = (
@@ -73,7 +73,7 @@ def generate_risk_map(infected_points, width, height, env_grid, grid_size=6):
 
     return risk_map
 
-def generate_heatmap_grid(risk_map, env_grid, grid_size=6):
+def generate_heatmap_grid(risk_map, env_grid, infected_points,grid_coords, grid_size=6):
 
     h, w = risk_map.shape
 
@@ -116,20 +116,116 @@ def generate_heatmap_grid(risk_map, env_grid, grid_size=6):
             else:
                 level = "low"
 
+            x_center = (x1 + x2) / 2
+            y_center = (y1 + y2) / 2
+
+            coord = grid_coords[i][j]
+
+            lat = coord[0]
+            lon = coord[1]
+
             env = env_grid[i][j]
 
+            detected_infected_trees = count_infected_in_cell(
+                x_center,
+                y_center,
+                infected_points
+            )
+
+            factors = {
+                "soil_moisture (m³/m³)": round(env["soil_moisture"], 3),
+                "humidity (%)": round(env["humidity"], 3),
+                "temperature (°C)": round(env["temperature"], 3)
+            }
+
+            near_infection = is_near_infection(x_center, y_center, infected_points)
+
+            explanation = generate_explanation(
+                factors=factors,
+                risk_level=level,
+                near_infection=near_infection
+            )
+
             row.append({
-                "x": (x1 + x2) / 2,
-                "y": (y1 + y2) / 2,
+                "lat": lat,
+                "lon": lon,
                 "risk": level,
                 "risk_score": score,
-                "factors": {
-                    "soil_moisture (m³/m³)": round(env["soil_moisture"], 3),
-                    "humidity (%)": round(env["humidity"], 3),
-                    "temperature (°C)": round(env["temperature"], 3)
-                }
+                "detected_infected_trees": detected_infected_trees,
+                "infection_nearby": near_infection,
+                "factors": factors,
+                "explanation": explanation
             })
 
         heatmap.append(row)
 
     return heatmap
+
+def generate_explanation(factors, risk_level, near_infection=False):
+    reasons = []
+    actions = []
+
+    humidity = factors.get("humidity (%)", 0)
+    soil = factors.get("soil_moisture (m³/m³)", 0)
+    temp = factors.get("temperature (°C)", 0)
+
+    if soil > 0.2:
+        reasons.append("High soil moisture promotes fungal growth")
+
+    if humidity > 80:
+        reasons.append("High humidity favors disease spread")
+
+    if temp > 27:
+        reasons.append("Warm temperature accelerates pathogen activity")
+
+    if near_infection:
+        reasons.append("Infection detected within nearby area")
+
+    if risk_level == "low":
+        reasons.append("Environmental conditions are less favorable for disease")
+
+    if soil > 0.2:
+        actions.append("Improve drainage in the plantation")
+
+    if humidity > 80:
+        actions.append("Increase spacing or airflow between trees")
+
+    if near_infection:
+        actions.append("Remove or isolate infected trees immediately")
+
+    if risk_level == "high":
+        actions.append("Apply fungicide treatment")
+
+    if risk_level == "medium":
+        actions.append("Monitor the area closely for changes")
+
+    if risk_level == "low":
+        actions.append("Maintain current plantation practices")
+
+    if not reasons:
+        reasons.append("No significant risk factors detected")
+
+    return {
+        "reasons": list(set(reasons)),
+        "actions": list(set(actions))
+    }
+
+def is_near_infection(x, y, infected_points, threshold=100):
+    for pt in infected_points:
+        dx = x - pt["x"]
+        dy = y - pt["y"]
+        if (dx**2 + dy**2) ** 0.5 < threshold:
+            return True
+    return False
+
+def count_infected_in_cell(x_center, y_center, infected_points, threshold=80):
+    count = 0
+    for pt in infected_points:
+        dx = x_center - pt["x"]
+        dy = y_center - pt["y"]
+        dist = (dx**2 + dy**2) ** 0.5
+
+        if dist < threshold:
+            count += 1
+
+    return count
