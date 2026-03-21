@@ -92,9 +92,9 @@ def interpolate_env(grid_coords, samples):
             temperature = min(40, max(15, temperature))  
 
             env_grid[i][j] = {
-                "soil_moisture": soil,
-                "humidity": humidity,
-                "temperature": temperature
+                "soil_moisture": round(soil, 4),
+                "humidity": round(humidity, 4),
+                "temperature": round(temperature, 4)
             }
 
     return env_grid

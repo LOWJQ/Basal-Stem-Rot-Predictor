@@ -26,11 +26,11 @@ def draw_heatmap(image_path, risk_map, infected_points, env_grid, output_path):
     if risk_map.shape != (height, width):
         risk_map = cv2.resize(risk_map, (width, height), interpolation=cv2.INTER_LINEAR)
 
-    combined = 0.7 * risk_map + 0.3 * env_norm
+    combined = risk_map
 
     heatmap = np.clip(combined, 0, 1)
 
-    heatmap = np.power(heatmap, 0.5)
+    heatmap = np.power(heatmap, 0.8)
 
     heatmap = (heatmap * 255).astype(np.uint8)
 

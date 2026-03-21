@@ -2,20 +2,35 @@ import numpy as np
 
 def calculate_env_risk(env):
     temp = env["temperature"]
-    humidity = env["humidity"] / 100.0
+    humidity = env["humidity"]  
     soil = env["soil_moisture"]
 
-    temp_score = min(max((temp - 24) / 10, 0), 1)
+    if temp < 20 or temp > 38:
+        temp_score = 0
+    elif 26 <= temp <= 32:
+        temp_score = 1
+    else:
+        temp_score = 1 - abs(temp - 29) / 10
+        temp_score = max(0, min(temp_score, 1))
+
+    humidity_score = 1 - abs(humidity - 80) / 40
+    humidity_score = max(0, min(humidity_score, 1))
+
+    soil_score = (soil - 0.1) / (0.5 - 0.1)
+    soil_score = max(0.1, min(soil_score, 1))
 
     env_risk = (
-        0.3 * temp_score +
-        0.4 * humidity +
-        0.3 * soil
+        0.2 * temp_score +
+        0.2 * humidity_score +
+        0.6 * soil_score
     )
 
     return min(max(env_risk, 0), 1)
 
-def generate_risk_map(infected_points, width, height):
+def generate_risk_map(infected_points, width, height, env_grid, grid_size=6):
+
+    cell_h = max(1, height // grid_size)
+    cell_w = max(1, width // grid_size)
 
     y_coords, x_coords = np.meshgrid(
         np.arange(height), np.arange(width), indexing='ij'
@@ -34,9 +49,22 @@ def generate_risk_map(infected_points, width, height):
 
         dist = np.maximum(dist, 1)
 
+        grid_y = np.clip((y_coords // cell_h).astype(int), 0, grid_size - 1)
+        grid_x = np.clip((x_coords // cell_w).astype(int), 0, grid_size - 1)
+
+        env_factor = np.zeros_like(risk_map)
+
+        for i in range(grid_size):
+            for j in range(grid_size):
+                mask = (grid_y == i) & (grid_x == j)
+                env = env_grid[i][j]
+                env_factor[mask] = calculate_env_risk(env)
+
+        spread_factor = 0.6 + 0.6 * env_factor  
+
         influence = conf * (
-            np.exp(-dist / 90) +
-            0.3 * np.exp(-dist / 18)
+            np.exp(-dist / (90 * spread_factor)) +
+            0.3 * np.exp(-dist / (18 * spread_factor))
         )
 
         risk_map += influence
@@ -75,15 +103,15 @@ def generate_heatmap_grid(risk_map, env_grid, grid_size=6):
                 env_score = calculate_env_risk(env)
 
                 score = (
-                    0.6 * infection_score +
-                    0.4 * env_score
+                    0.85 * infection_score +
+                    0.15 * env_score
                 )
 
             score = max(0.0, min(score, 1.0))
 
-            if score > 0.65:
+            if score > 0.68:
                 level = "high"
-            elif score > 0.35:
+            elif score > 0.4:
                 level = "medium"
             else:
                 level = "low"
@@ -96,9 +124,9 @@ def generate_heatmap_grid(risk_map, env_grid, grid_size=6):
                 "risk": level,
                 "risk_score": score,
                 "factors": {
-                    "soil_moisture": env["soil_moisture"],
-                    "humidity": env["humidity"] / 100.0,  
-                    "temperature": env["temperature"]
+                    "soil_moisture (m³/m³)": round(env["soil_moisture"], 3),
+                    "humidity (%)": round(env["humidity"], 3),
+                    "temperature (°C)": round(env["temperature"], 3)
                 }
             })
 

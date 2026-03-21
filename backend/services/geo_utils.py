@@ -1,5 +1,6 @@
 import math
 
+#used to generate the coordinate for other area based on the altitude and center latitude and longitude
 def generate_grid_coordinates(center_lat, center_lon, altitude, grid_size=6):
     FOV = 60 
 

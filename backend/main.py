@@ -91,7 +91,6 @@ def predict():
         cv2.imwrite(temp_path, img)
 
         infected_points = detect_infected(temp_path)
-        risk_map = generate_risk_map(infected_points, width, height)
 
         grid_coords = generate_grid_coordinates(lat, lon, altitude)
 
@@ -99,6 +98,8 @@ def predict():
 
         env_grid = interpolate_env(grid_coords, samples)
 
+        risk_map = generate_risk_map(infected_points, width, height, env_grid)
+        
         heatmap = generate_heatmap_grid(risk_map, env_grid)
 
         output_name = f"output_{uuid.uuid4().hex}.jpg"

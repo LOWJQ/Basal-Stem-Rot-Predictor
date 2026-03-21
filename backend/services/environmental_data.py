@@ -46,9 +46,9 @@ def get_environmental_data(lat, lon):
     soil = get_soil(lat, lon)
 
     return {
-        "temperature": weather["temperature"],
-        "humidity": weather["humidity"],
-        "soil_moisture": soil["soil_moisture"]
+        "temperature": round(weather["temperature"], 3),
+        "humidity": round(weather["humidity"], 3),
+        "soil_moisture": round(soil["soil_moisture"], 3)
     }
 
 cache = {}
