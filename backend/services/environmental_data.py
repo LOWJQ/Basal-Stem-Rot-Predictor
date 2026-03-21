@@ -21,7 +21,7 @@ def get_weather(lat, lon):
     except Exception:
         return {
             "temperature": 30,
-            "humidity": 80
+            "humidity": 70
         }
 
 
@@ -37,7 +37,7 @@ def get_soil(lat, lon):
 
     except Exception:
         return {
-            "soil_moisture": 0.6
+            "soil_moisture": 0.2
         }
 
 
@@ -50,3 +50,16 @@ def get_environmental_data(lat, lon):
         "humidity": weather["humidity"],
         "soil_moisture": soil["soil_moisture"]
     }
+
+cache = {}
+
+def get_env_cached(lat, lon):
+    key = (round(lat, 4), round(lon, 4))  
+
+    if key in cache:
+        return cache[key]
+
+    data = get_environmental_data(lat, lon)
+    cache[key] = data
+
+    return data

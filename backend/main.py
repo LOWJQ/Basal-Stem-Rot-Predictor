@@ -5,10 +5,12 @@ import cv2
 import numpy as np
 import uuid
 
+from services.env_interpolation import interpolate_env, sample_environment
+from services.geo_utils import generate_grid_coordinates
 from services.image_processing import detect_infected
 from services.risk_analysis import generate_risk_map, generate_heatmap_grid
 from services.visualization import draw_heatmap
-from services.environmental_data import get_environmental_data
+from services.environmental_data import get_env_cached, get_environmental_data
 
 app = Flask(__name__)
 CORS(app)
@@ -37,14 +39,22 @@ def predict():
             lon = float(lon)
         except:
             return jsonify({"error": "Invalid latitude/longitude"}), 400
+    
+    altitude = request.form.get("altitude")
+
+    if not altitude:
+        altitude = 50  # default (meters)
+    else:
+        try:
+            altitude = float(altitude)
+        except:
+            return jsonify({"error": "Invalid altitude"}), 400
 
     try:
         if request.method == "GET":
             return jsonify({
                 "message": "Send a POST request with an image file using key 'image'"
             })
-        
-        env_data = get_environmental_data(lat, lon)
 
         file = request.files.get("image")
 
@@ -82,16 +92,27 @@ def predict():
 
         infected_points = detect_infected(temp_path)
         risk_map = generate_risk_map(infected_points, width, height)
-        heatmap = generate_heatmap_grid(risk_map)
+
+        grid_coords = generate_grid_coordinates(lat, lon, altitude)
+
+        samples = sample_environment(grid_coords, infected_points, get_env_cached, width, height)
+
+        env_grid = interpolate_env(grid_coords, samples)
+
+        heatmap = generate_heatmap_grid(risk_map, env_grid)
 
         output_name = f"output_{uuid.uuid4().hex}.jpg"
         output_path = os.path.join(BASE_DIR, "output", "heatmap", output_name)
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        output_image = draw_heatmap(temp_path, risk_map, infected_points, output_path)
+        output_image = draw_heatmap(temp_path, risk_map, infected_points, env_grid, output_path)
 
         if output_image is None:
             return jsonify({"error": "Failed to process image"}), 400
+
+        avg_soil = np.mean([v["soil_moisture"] for v in samples.values()])
+        avg_humidity = np.mean([v["humidity"] for v in samples.values()])
+        avg_temp = np.mean([v["temperature"] for v in samples.values()])
 
         return jsonify({
             "status": "success",
@@ -102,7 +123,12 @@ def predict():
                 },
                 "infected_points": infected_points,
                 "heatmap": heatmap,
-                "environment": env_data,
+                "environment_summary": {
+                    "sampled_points": len(samples),
+                    "avg_soil_moisture": float(avg_soil),
+                    "avg_humidity": float(avg_humidity),
+                    "avg_temperature": float(avg_temp)
+                },
                 "output_image": output_image
             }
         })
@@ -113,7 +139,6 @@ def predict():
     finally:
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
-
 
 if __name__ == "__main__":
     app.run(debug=True)

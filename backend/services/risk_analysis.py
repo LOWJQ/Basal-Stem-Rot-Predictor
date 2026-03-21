@@ -1,5 +1,20 @@
 import numpy as np
 
+def calculate_env_risk(env):
+    temp = env["temperature"]
+    humidity = env["humidity"] / 100.0
+    soil = env["soil_moisture"]
+
+    temp_score = min(max((temp - 24) / 10, 0), 1)
+
+    env_risk = (
+        0.3 * temp_score +
+        0.4 * humidity +
+        0.3 * soil
+    )
+
+    return min(max(env_risk, 0), 1)
+
 def generate_risk_map(infected_points, width, height):
 
     y_coords, x_coords = np.meshgrid(
@@ -30,7 +45,7 @@ def generate_risk_map(infected_points, width, height):
 
     return risk_map
 
-def generate_heatmap_grid(risk_map, grid_size=6):
+def generate_heatmap_grid(risk_map, env_grid, grid_size=6):
 
     h, w = risk_map.shape
 
@@ -53,16 +68,27 @@ def generate_heatmap_grid(risk_map, grid_size=6):
             if cell.size == 0:
                 score = 0.0
             else:
-                score = float(np.percentile(cell, 90))   
+                infection_score = float(np.percentile(cell, 90))
+                infection_score = max(0.0, min(infection_score, 1.0))
+
+                env = env_grid[i][j]
+                env_score = calculate_env_risk(env)
+
+                score = (
+                    0.6 * infection_score +
+                    0.4 * env_score
+                )
 
             score = max(0.0, min(score, 1.0))
 
-            if score > 0.6:
+            if score > 0.65:
                 level = "high"
-            elif score > 0.3:
+            elif score > 0.35:
                 level = "medium"
             else:
                 level = "low"
+
+            env = env_grid[i][j]
 
             row.append({
                 "x": (x1 + x2) / 2,
@@ -70,9 +96,9 @@ def generate_heatmap_grid(risk_map, grid_size=6):
                 "risk": level,
                 "risk_score": score,
                 "factors": {
-                    "soil_moisture": 0.7,
-                    "humidity": 0.8,
-                    "temperature": 30
+                    "soil_moisture": env["soil_moisture"],
+                    "humidity": env["humidity"] / 100.0,  
+                    "temperature": env["temperature"]
                 }
             })
 
