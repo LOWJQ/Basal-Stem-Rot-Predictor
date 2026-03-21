@@ -1,8 +1,9 @@
 import numpy as np
 
+
 def calculate_env_risk(env):
     temp = env["temperature"]
-    humidity = env["humidity"]  
+    humidity = env["humidity"]
     soil = env["soil_moisture"]
 
     if temp < 20 or temp > 38:
@@ -19,22 +20,17 @@ def calculate_env_risk(env):
     soil_score = (soil - 0.1) / (0.25 - 0.1)
     soil_score = max(0.1, min(soil_score, 1))
 
-    env_risk = (
-        0.2 * temp_score +
-        0.2 * humidity_score +
-        0.6 * soil_score
-    )
+    env_risk = 0.2 * temp_score + 0.2 * humidity_score + 0.6 * soil_score
 
     return min(max(env_risk, 0), 1)
+
 
 def generate_risk_map(infected_points, width, height, env_grid, grid_size=6):
 
     cell_h = max(1, height // grid_size)
     cell_w = max(1, width // grid_size)
 
-    y_coords, x_coords = np.meshgrid(
-        np.arange(height), np.arange(width), indexing='ij'
-    )
+    y_coords, x_coords = np.meshgrid(np.arange(height), np.arange(width), indexing="ij")
 
     risk_map = np.zeros((height, width), dtype=np.float32)
 
@@ -60,11 +56,11 @@ def generate_risk_map(infected_points, width, height, env_grid, grid_size=6):
                 env = env_grid[i][j]
                 env_factor[mask] = calculate_env_risk(env)
 
-        spread_factor = 0.6 + 0.6 * env_factor  
+        spread_factor = 0.6 + 0.6 * env_factor
 
         influence = conf * (
-            np.exp(-dist / (90 * spread_factor)) +
-            0.3 * np.exp(-dist / (18 * spread_factor))
+            np.exp(-dist / (90 * spread_factor))
+            + 0.3 * np.exp(-dist / (18 * spread_factor))
         )
 
         risk_map += influence
@@ -73,7 +69,10 @@ def generate_risk_map(infected_points, width, height, env_grid, grid_size=6):
 
     return risk_map
 
-def generate_heatmap_grid(risk_map, env_grid, infected_points,grid_coords, grid_size=6):
+
+def generate_heatmap_grid(
+    risk_map, env_grid, infected_points, grid_coords, grid_size=6
+):
 
     h, w = risk_map.shape
 
@@ -102,10 +101,7 @@ def generate_heatmap_grid(risk_map, env_grid, infected_points,grid_coords, grid_
                 env = env_grid[i][j]
                 env_score = calculate_env_risk(env)
 
-                score = (
-                    0.85 * infection_score +
-                    0.15 * env_score
-                )
+                score = 0.85 * infection_score + 0.15 * env_score
 
             score = max(0.0, min(score, 1.0))
 
@@ -127,39 +123,38 @@ def generate_heatmap_grid(risk_map, env_grid, infected_points,grid_coords, grid_
             env = env_grid[i][j]
 
             detected_infected_trees = count_infected_in_cell(
-                x_center,
-                y_center,
-                infected_points
+                x_center, y_center, infected_points
             )
 
             factors = {
                 "soil_moisture (m³/m³)": round(env["soil_moisture"], 3),
                 "humidity (%)": round(env["humidity"], 3),
-                "temperature (°C)": round(env["temperature"], 3)
+                "temperature (°C)": round(env["temperature"], 3),
             }
 
             near_infection = is_near_infection(x_center, y_center, infected_points)
 
             explanation = generate_explanation(
-                factors=factors,
-                risk_level=level,
-                near_infection=near_infection
+                factors=factors, risk_level=level, near_infection=near_infection
             )
 
-            row.append({
-                "lat": lat,
-                "lon": lon,
-                "risk": level,
-                "risk_score": score,
-                "detected_infected_trees": detected_infected_trees,
-                "infection_nearby": near_infection,
-                "factors": factors,
-                "explanation": explanation
-            })
+            row.append(
+                {
+                    "lat": lat,
+                    "lon": lon,
+                    "risk": level,
+                    "risk_score": score,
+                    "detected_infected_trees": detected_infected_trees,
+                    "infection_nearby": near_infection,
+                    "factors": factors,
+                    "explanation": explanation,
+                }
+            )
 
         heatmap.append(row)
 
     return heatmap
+
 
 def generate_explanation(factors, risk_level, near_infection=False):
     reasons = []
@@ -205,10 +200,8 @@ def generate_explanation(factors, risk_level, near_infection=False):
     if not reasons:
         reasons.append("No significant risk factors detected")
 
-    return {
-        "reasons": list(set(reasons)),
-        "actions": list(set(actions))
-    }
+    return {"reasons": list(set(reasons)), "actions": list(set(actions))}
+
 
 def is_near_infection(x, y, infected_points, threshold=100):
     for pt in infected_points:
@@ -217,6 +210,7 @@ def is_near_infection(x, y, infected_points, threshold=100):
         if (dx**2 + dy**2) ** 0.5 < threshold:
             return True
     return False
+
 
 def count_infected_in_cell(x_center, y_center, infected_points, threshold=80):
     count = 0

@@ -7,6 +7,7 @@ MODEL_PATH = os.path.join(BASE_DIR, "model", "model1.pt")
 
 model = None
 
+
 def get_model():
     global model
     if model is None:
@@ -19,6 +20,7 @@ def get_model():
         except Exception as e:
             raise RuntimeError(f"Failed to load model: {str(e)}")
     return model
+
 
 def detect_infected(image_path):
     try:
@@ -45,10 +47,6 @@ def detect_infected(image_path):
         cx = (x1 + x2) / 2
         cy = (y1 + y2) / 2
 
-        infected_points.append({
-            "x": cx,
-            "y": cy,
-            "conf": float(conf)
-        })
+        infected_points.append({"x": cx, "y": cy, "conf": float(conf)})
 
     return infected_points

@@ -2,7 +2,10 @@ import cv2
 import numpy as np
 import os
 
-def draw_heatmap(image_path, risk_map, infected_points, env_grid, output_path):
+
+def draw_heatmap(
+    image_path, risk_map, current_points, env_grid, output_path
+):
 
     img = cv2.imread(image_path)
 
@@ -13,7 +16,9 @@ def draw_heatmap(image_path, risk_map, infected_points, env_grid, output_path):
 
     env_map = np.array([[cell["soil_moisture"] for cell in row] for row in env_grid])
 
-    env_map_resized = cv2.resize(env_map, (width, height), interpolation=cv2.INTER_LINEAR)
+    env_map_resized = cv2.resize(
+        env_map, (width, height), interpolation=cv2.INTER_LINEAR
+    )
 
     env_min = np.min(env_map_resized)
     env_max = np.max(env_map_resized)
@@ -38,9 +43,8 @@ def draw_heatmap(image_path, risk_map, infected_points, env_grid, output_path):
 
     overlay = cv2.addWeighted(img, 0.6, heatmap_color, 0.4, 0)
 
-    for p in infected_points:
-        x = int(float(p["x"]))
-        y = int(float(p["y"]))
+    for p in current_points:
+        x, y = int(p["x"]), int(p["y"])
         cv2.circle(overlay, (x, y), 5, (255, 0, 0), -1)
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
