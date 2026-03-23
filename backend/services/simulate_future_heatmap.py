@@ -1,6 +1,5 @@
 import copy
 import random
-
 import cv2
 import numpy as np
 
@@ -14,7 +13,6 @@ def simulate_future_heatmap(heatmap, weeks=1):
     for i in range(rows):
         for j in range(cols):
             cell = heatmap[i][j]
-
             base_risk = cell["risk_score"]
 
             neighbors = []
@@ -26,18 +24,17 @@ def simulate_future_heatmap(heatmap, weeks=1):
                             neighbors.append(heatmap[ni][nj])
 
             infection_pressure = 0
-
             for n in neighbors:
                 if n["detected_infected_trees"] > 0:
-                    infection_pressure += 0.4
+                    infection_pressure += 0.6
                 elif n["risk"] == "high":
-                    infection_pressure += n["risk_score"] * 0.3
+                    infection_pressure += n["risk_score"] * 0.4
 
             humidity = cell["factors"]["humidity (%)"]
             soil = cell["factors"]["soil_moisture (m³/m³)"]
 
             if cell["detected_infected_trees"] > 0:
-                base_risk += 0.3
+                base_risk += 0.1
 
             env_factor = 0
             if humidity > 80:
@@ -45,7 +42,7 @@ def simulate_future_heatmap(heatmap, weeks=1):
             if soil > 0.22:
                 env_factor += 0.05
 
-            time_factor = 0.001 * weeks + 0.005 * infection_pressure
+            time_factor = 0.005 * weeks + 0.02 * infection_pressure
 
             has_infection_source = (
                 cell["detected_infected_trees"] > 0 or infection_pressure > 0
@@ -53,7 +50,7 @@ def simulate_future_heatmap(heatmap, weeks=1):
 
             if has_infection_source:
                 future_risk = (
-                    base_risk + (infection_pressure * 0.02) + env_factor + time_factor
+                    base_risk + (infection_pressure * 0.01) + env_factor + time_factor
                 )
             else:
                 future_risk = base_risk + env_factor * 0.1
@@ -73,8 +70,7 @@ def simulate_future_heatmap(heatmap, weeks=1):
             future[i][j]["risk"] = risk_label
 
     risk_array = np.array([[cell["risk_score"] for cell in row] for row in future])
-
-    risk_array = cv2.GaussianBlur(risk_array, (3, 3), 0)
+    risk_array = cv2.GaussianBlur(risk_array, (3, 3), 0.3)
 
     for i in range(rows):
         for j in range(cols):
@@ -83,12 +79,14 @@ def simulate_future_heatmap(heatmap, weeks=1):
     return future
 
 
-def simulate_future_steps(initial_heatmap, steps=6):
+def simulate_future_steps(initial_heatmap, steps=7):
     maps = []
     current = copy.deepcopy(initial_heatmap)
 
+    maps.append(copy.deepcopy(current))
+
     for i in range(steps):
-        current = simulate_future_heatmap(current, weeks=1)
+        current = simulate_future_heatmap(current, weeks=i + 1)
         maps.append(copy.deepcopy(current))
 
     return maps

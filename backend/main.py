@@ -4,6 +4,7 @@ import os
 import cv2
 import numpy as np
 import uuid
+import time
 
 from services.simulate_future_heatmap import grid_to_risk_map, simulate_future_heatmap
 from services.env_interpolation import interpolate_env, sample_environment
@@ -13,7 +14,7 @@ from services.risk_analysis import generate_risk_map, generate_heatmap_grid
 from services.visualization import draw_heatmap
 from services.environmental_data import get_env_cached
 from services.simulate_future_heatmap import simulate_future_steps
-from services.gif_generator import create_gif
+from services.video_generator import create_video
 
 app = Flask(__name__)
 CORS(app)
@@ -108,7 +109,7 @@ def predict():
             risk_map, env_grid, infected_points, grid_coords
         )
 
-        future_steps = [heatmap] + simulate_future_steps(heatmap, steps=6)
+        future_steps = [heatmap] + simulate_future_steps(heatmap, steps=7)
 
         frame_paths = []
 
@@ -130,10 +131,10 @@ def predict():
 
             frame_paths.append(frame_path)
 
-        gif_name = f"prediction_{uuid.uuid4().hex}.gif"
-        gif_path = os.path.join(BASE_DIR, "output", "heatmap", gif_name)
+        video_name = f"prediction_{int(time.time())}_{uuid.uuid4().hex}.mp4"
+        video_path = os.path.join(BASE_DIR, "output", "heatmap", video_name)
 
-        gif_output = create_gif(frame_paths, gif_path)
+        video_output = create_video(frame_paths, video_path)
 
         for path in frame_paths:
             if os.path.exists(path):
@@ -172,7 +173,7 @@ def predict():
                         "avg_temperature": float(avg_temp),
                     },
                     "output_image": output_image,
-                    "future_output_image": gif_output,
+                    "future_output_image": f"{video_output}?t={int(time.time())}",
                     "frames": frame_paths
                 },
             }
