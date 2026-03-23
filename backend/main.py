@@ -12,6 +12,8 @@ from services.image_processing import detect_infected
 from services.risk_analysis import generate_risk_map, generate_heatmap_grid
 from services.visualization import draw_heatmap
 from services.environmental_data import get_env_cached
+from services.simulate_future_heatmap import simulate_future_steps
+from services.gif_generator import create_gif
 
 app = Flask(__name__)
 CORS(app)
@@ -106,21 +108,36 @@ def predict():
             risk_map, env_grid, infected_points, grid_coords
         )
 
-        future_heatmap = simulate_future_heatmap(heatmap, months=3)
-        future_risk_map = grid_to_risk_map(future_heatmap, width, height)
+        future_steps = [heatmap] + simulate_future_steps(heatmap, steps=6)
 
-        future_output_name = f"future_{uuid.uuid4().hex}.jpg"
-        future_output_path = os.path.join(
-            BASE_DIR, "output", "heatmap", future_output_name
-        )
+        frame_paths = []
 
-        future_output_image = draw_heatmap(
-            temp_path,
-            future_risk_map,
-            [],
-            env_grid,
-            future_output_path,
-        )
+        for idx, step_heatmap in enumerate(future_steps):
+
+            step_risk_map = grid_to_risk_map(step_heatmap, width, height)
+
+            frame_name = f"frame_{idx}_{uuid.uuid4().hex}.jpg"
+            frame_path = os.path.join(BASE_DIR, "output", "heatmap", frame_name)
+
+            draw_heatmap(
+                temp_path,
+                step_risk_map,
+                [],  
+                env_grid,
+                frame_path,
+                week = idx if idx > 0 else "Now", 
+            )
+
+            frame_paths.append(frame_path)
+
+        gif_name = f"prediction_{uuid.uuid4().hex}.gif"
+        gif_path = os.path.join(BASE_DIR, "output", "heatmap", gif_name)
+
+        gif_output = create_gif(frame_paths, gif_path)
+
+        for path in frame_paths:
+            if os.path.exists(path):
+                os.remove(path)
 
         output_name = f"output_{uuid.uuid4().hex}.jpg"
         output_path = os.path.join(BASE_DIR, "output", "heatmap", output_name)
@@ -155,7 +172,8 @@ def predict():
                         "avg_temperature": float(avg_temp),
                     },
                     "output_image": output_image,
-                    "future_output_image": future_output_image,
+                    "future_output_image": gif_output,
+                    "frames": frame_paths
                 },
             }
         )

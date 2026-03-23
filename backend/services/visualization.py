@@ -4,7 +4,7 @@ import os
 
 
 def draw_heatmap(
-    image_path, risk_map, current_points, env_grid, output_path
+    image_path, risk_map, current_points, env_grid, output_path, week=None
 ):
 
     img = cv2.imread(image_path)
@@ -46,6 +46,17 @@ def draw_heatmap(
     for p in current_points:
         x, y = int(p["x"]), int(p["y"])
         cv2.circle(overlay, (x, y), 5, (255, 0, 0), -1)
+
+    if week is not None:
+        cv2.putText(
+            overlay,
+            f"{week}" if week == "Now" else f"Week {week}",
+            (20, 40),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1,
+            (255, 255, 255),
+            2,
+        )
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     cv2.imwrite(output_path, overlay)
