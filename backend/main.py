@@ -109,7 +109,7 @@ def predict():
             risk_map, env_grid, infected_points, grid_coords
         )
 
-        future_steps = [heatmap] + simulate_future_steps(heatmap, steps=7)
+        future_steps = [heatmap] + simulate_future_steps(heatmap, steps=11)
 
         frame_paths = []
 
