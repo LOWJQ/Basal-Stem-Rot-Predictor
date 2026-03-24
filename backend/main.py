@@ -173,8 +173,7 @@ def predict():
                         "avg_temperature": float(avg_temp),
                     },
                     "output_image": output_image,
-                    "future_output_image": f"{video_output}?t={int(time.time())}",
-                    "frames": frame_paths
+                    "future_output_image": f"{video_output}?t={int(time.time())}"
                 },
             }
         )
