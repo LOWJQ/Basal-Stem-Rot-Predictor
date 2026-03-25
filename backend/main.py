@@ -16,7 +16,7 @@ from services.simulate_future_heatmap import simulate_future_steps
 
 app = Flask(__name__)
 
-
+# test
 @app.route("/outputs/<path:filename>")
 def serve_outputs(filename):
     return send_from_directory("output", filename)
