@@ -73,44 +73,32 @@ def sample_environment(
 
 
 def interpolate_env(grid_coords, samples):
-
     grid_size = len(grid_coords)
     env_grid = [[None] * grid_size for _ in range(grid_size)]
 
     for i in range(grid_size):
         for j in range(grid_size):
-
             if (i, j) in samples:
                 env_grid[i][j] = samples[(i, j)]
                 continue
 
-            nearest = min(
-                samples.keys(), key=lambda k: (k[0] - i) ** 2 + (k[1] - j) ** 2
-            )
-            base = samples[nearest]
+            total_weight = 0
+            soil = humidity = temperature = 0
 
-            min_dist = min((k[0] - i) ** 2 + (k[1] - j) ** 2 for k in samples.keys())
-            distance_factor = 1 / (1 + min_dist)
-
-            variation = ((i + j) % 3) * 0.02
-
-            soil = base["soil_moisture"] * (1 + 0.2 * distance_factor)
-            soil = soil + variation
-
-            soil = min(1, max(0, soil))
-
-            humidity = base["humidity"] * (1 + 0.1 * distance_factor)
-            humidity = humidity + variation * 10
-            humidity = min(100, max(0, humidity))
-
-            temperature = base["temperature"] * (1 - 0.05 * distance_factor)
-            temperature = temperature + variation * 2
-            temperature = min(40, max(15, temperature))
+            for (si, sj), env in samples.items():
+                dist_sq = (si - i) ** 2 + (sj - j) ** 2
+                if dist_sq == 0:
+                    dist_sq = 0.0001  
+                w = 1 / dist_sq
+                soil        += env["soil_moisture"] * w
+                humidity    += env["humidity"] * w
+                temperature += env["temperature"] * w
+                total_weight += w
 
             env_grid[i][j] = {
-                "soil_moisture": round(soil, 4),
-                "humidity": round(humidity, 4),
-                "temperature": round(temperature, 4),
+                "soil_moisture": round(min(1, max(0, soil / total_weight)), 4),
+                "humidity":      round(min(100, max(0, humidity / total_weight)), 4),
+                "temperature":   round(min(40, max(15, temperature / total_weight)), 4),
             }
 
     return env_grid

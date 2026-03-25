@@ -8,14 +8,7 @@ def simulate_future_heatmap(heatmap, weeks=1):
     cols = len(heatmap[0])
 
     future = [
-        [
-            {
-                **cell,
-                "factors": dict(cell["factors"])
-            }
-            for cell in row
-        ]
-        for row in heatmap
+        [{**cell, "factors": dict(cell["factors"])} for cell in row] for row in heatmap
     ]
 
     for i in range(rows):
@@ -23,66 +16,59 @@ def simulate_future_heatmap(heatmap, weeks=1):
             cell = heatmap[i][j]
             base_risk = cell["risk_score"]
 
-            neighbors = []
-            for dx in [-1, 0, 1]:
-                for dy in [-1, 0, 1]:
-                    ni, nj = i + dx, j + dy
+            neighbour_risks = []
+            neighbour_has_infection = False
+
+            for di in [-1, 0, 1]:
+                for dj in [-1, 0, 1]:
+                    if di == 0 and dj == 0:
+                        continue
+                    ni, nj = i + di, j + dj
                     if 0 <= ni < rows and 0 <= nj < cols:
-                        if not (dx == 0 and dy == 0):
-                            neighbors.append(heatmap[ni][nj])
+                        neighbour = heatmap[ni][nj]
+                        neighbour_risks.append(neighbour["risk_score"])
 
-            infection_pressure = 0
-            for n in neighbors:
-                if n["detected_infected_trees"] > 0:
-                    infection_pressure += 1.28
-                elif n["risk"] == "high":
-                    infection_pressure += n["risk_score"] * 1.08
+                        if neighbour.get("detected_infected_trees", 0) > 0:
+                            neighbour_has_infection = True
 
-            humidity = cell["factors"]["humidity (%)"]
-            soil = cell["factors"]["soil_moisture (m³/m³)"]
-
-            if cell["detected_infected_trees"] > 0:
-                base_risk += 0.1
-
-            env_factor = 0
-            if humidity > 80:
-                env_factor += 0.05
-            if soil > 0.22:
-                env_factor += 0.05
-
-            time_factor = 0.005 * weeks + 0.02 * infection_pressure
-
-            has_infection_source = (
-                cell["detected_infected_trees"] > 0 or infection_pressure > 0
+            avg_neighbour = (
+                sum(neighbour_risks) / len(neighbour_risks) if neighbour_risks else 0
             )
 
-            if has_infection_source:
-                future_risk = (
-                    base_risk + (infection_pressure * 0.01) + env_factor + time_factor
-                )
+            humidity = cell["factors"]["humidity (%)"]
+            soil     = cell["factors"]["soil_moisture (m³/m³)"]
+            temp     = cell["factors"]["temperature (°C)"]
+
+            conductivity = 0.0
+            if 26 <= temp <= 32:  conductivity += 0.3
+            if humidity > 80:     conductivity += 0.3
+            if soil > 0.20:       conductivity += 0.4  
+
+            own_infected = cell.get("detected_infected_trees", 0)
+
+            if own_infected > 0:
+                infection_source_pressure = 0.08 * conductivity * min(own_infected, 5)
+            elif neighbour_has_infection:
+                infection_source_pressure = 0.05 * conductivity
             else:
-                future_risk = base_risk + env_factor * 0.1
+                infection_source_pressure = 0.0
 
-            noise = random.uniform(-0.01, 0.01)
-            future_risk += noise
-            future_risk = max(0, min(future_risk, 1.0))
+            spread_pressure = avg_neighbour * conductivity * 0.15
+            new_risk = base_risk + spread_pressure + infection_source_pressure
 
-            if future_risk > 0.68:
-                risk_label = "high"
-            elif future_risk > 0.4:
-                risk_label = "medium"
-            else:
-                risk_label = "low"
+            if avg_neighbour < 0.2 and conductivity < 0.3 and own_infected == 0:
+                new_risk *= 0.97
 
-            future[i][j]["risk_score"] = future_risk
-            future[i][j]["risk"] = risk_label
+            new_risk = max(0.0, min(1.0, new_risk))
 
-    risk_array = np.array([[cell["risk_score"] for cell in row] for row in future])
-    risk_array = cv2.GaussianBlur(risk_array, (3, 3), 0.3)
+            if new_risk > 0.68:   label = "high"
+            elif new_risk > 0.4:  label = "medium"
+            else:                  label = "low"
 
-    for i in range(rows):
-        for j in range(cols):
-            future[i][j]["risk_score"] = float(risk_array[i][j])
+            future[i][j]["risk_score"] = round(new_risk, 4)
+            future[i][j]["risk"] = label
+
+            future[i][j]["detected_infected_trees"] = own_infected
 
     return future
 

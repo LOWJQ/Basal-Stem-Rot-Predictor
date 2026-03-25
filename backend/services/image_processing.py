@@ -1,24 +1,22 @@
 from ultralytics import YOLO
 from PIL import Image
 import os
+import threading
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "model", "model1.pt")
 
+_model_lock = threading.Lock()
 model = None
 
 
 def get_model():
     global model
-    if model is None:
-        if not os.path.exists(MODEL_PATH):
-            raise FileNotFoundError(
-                "Model not found. Please download model1.pt and place it in backend/model/"
-            )
-        try:
+    with _model_lock:          
+        if model is None:
+            if not os.path.exists(MODEL_PATH):
+                raise FileNotFoundError("Model not found. Place model1.pt in backend/model/")
             model = YOLO(MODEL_PATH)
-        except Exception as e:
-            raise RuntimeError(f"Failed to load model: {str(e)}")
     return model
 
 

@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def classify_risk(r):
     if r < 0.33:
         return "low"
@@ -7,6 +8,7 @@ def classify_risk(r):
         return "medium"
     else:
         return "high"
+
 
 def calculate_env_risk(env):
     temp = env["temperature"]
@@ -155,17 +157,23 @@ def generate_heatmap_grid(
 
         heatmap.append(row)
 
-        flat_heatmap = []
-        for i, row in enumerate(heatmap):
-            for j, cell in enumerate(row):
-                risk = float(cell["risk_score"])
-                flat_heatmap.append({
+    flat_heatmap = []
+    for i, row in enumerate(heatmap):
+        for j, cell in enumerate(row):
+            flat_heatmap.append(
+                {
                     "x": j,
                     "y": i,
-                    "risk": risk,
-                    "risk_level": classify_risk(risk),
-                    "factors": dict(cell["factors"])
-                })
+                    "risk": cell["risk"],
+                    "risk_score": float(cell["risk_score"]),
+                    "factors": dict(cell["factors"]),
+                    "explanation": cell["explanation"],
+                    "detected_infected_trees": cell["detected_infected_trees"],
+                    "infection_nearby": cell["infection_nearby"],
+                    "lat": cell["lat"],
+                    "lon": cell["lon"],
+                }
+            )
 
     return heatmap, flat_heatmap
 

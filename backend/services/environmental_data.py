@@ -1,8 +1,10 @@
 import requests
 import os
 from dotenv import load_dotenv
+import logging
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 AGRO_API_KEY = os.getenv("AGRO_API_KEY")
@@ -11,27 +13,27 @@ AGRO_API_KEY = os.getenv("AGRO_API_KEY")
 def get_weather(lat, lon):
     try:
         url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric"
-        res = requests.get(url)
+        res = requests.get(url, timeout=5)
+        res.raise_for_status()
         data = res.json()
-
         return {
             "temperature": data["main"]["temp"],
             "humidity": data["main"]["humidity"],
         }
-
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Weather API failed for ({lat},{lon}): {e} — using defaults")
         return {"temperature": 30, "humidity": 70}
 
 
 def get_soil(lat, lon):
     try:
         url = f"http://api.agromonitoring.com/agro/1.0/soil?lat={lat}&lon={lon}&appid={AGRO_API_KEY}"
-        res = requests.get(url)
+        res = requests.get(url, timeout=5)
+        res.raise_for_status()
         data = res.json()
-
         return {"soil_moisture": data["moisture"]}
-
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Soil API failed for ({lat},{lon}): {e} — using defaults")
         return {"soil_moisture": 0.2}
 
 
