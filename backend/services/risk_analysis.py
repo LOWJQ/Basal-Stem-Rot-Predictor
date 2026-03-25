@@ -56,12 +56,7 @@ def generate_risk_map(infected_points, width, height, env_grid, grid_size=6):
                 env = env_grid[i][j]
                 env_factor[mask] = calculate_env_risk(env)
 
-        spread_factor = 0.6 + 0.6 * env_factor
-
-        influence = conf * (
-            np.exp(-dist / (90 * spread_factor))
-            + 0.3 * np.exp(-dist / (18 * spread_factor))
-        )
+        influence = conf * (dist < 25).astype(float)
 
         risk_map += influence
 
@@ -95,13 +90,13 @@ def generate_heatmap_grid(
             if cell.size == 0:
                 score = 0.0
             else:
-                infection_score = float(np.percentile(cell, 90))
+                infection_score = float(np.max(cell))
                 infection_score = max(0.0, min(infection_score, 1.0))
 
                 env = env_grid[i][j]
                 env_score = calculate_env_risk(env)
 
-                score = 0.85 * infection_score + 0.15 * env_score
+                score = max(infection_score, env_score * 0.3)
 
             score = max(0.0, min(score, 1.0))
 
@@ -140,10 +135,10 @@ def generate_heatmap_grid(
 
             row.append(
                 {
-                    "lat": lat,
-                    "lon": lon,
+                    "lat": round(lat, 4),
+                    "lon": round(lon, 4),
                     "risk": level,
-                    "risk_score": score,
+                    "risk_score": round(score, 4),
                     "detected_infected_trees": detected_infected_trees,
                     "infection_nearby": near_infection,
                     "factors": factors,
@@ -153,7 +148,17 @@ def generate_heatmap_grid(
 
         heatmap.append(row)
 
-    return heatmap
+        flat_heatmap = []
+        for i, row in enumerate(heatmap):
+            for j, cell in enumerate(row):
+                flat_heatmap.append({
+                    "x": j,
+                    "y": i,
+                    "risk": float(cell["risk"]),
+                    "factors": dict(cell["factors"])
+                })
+
+    return flat_heatmap
 
 
 def generate_explanation(factors, risk_level, near_infection=False):

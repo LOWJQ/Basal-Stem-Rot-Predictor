@@ -1,4 +1,3 @@
-import copy
 import random
 import cv2
 import numpy as np
@@ -8,7 +7,16 @@ def simulate_future_heatmap(heatmap, weeks=1):
     rows = len(heatmap)
     cols = len(heatmap[0])
 
-    future = copy.deepcopy(heatmap)
+    future = [
+        [
+            {
+                **cell,
+                "factors": dict(cell["factors"])
+            }
+            for cell in row
+        ]
+        for row in heatmap
+    ]
 
     for i in range(rows):
         for j in range(cols):
@@ -26,15 +34,15 @@ def simulate_future_heatmap(heatmap, weeks=1):
             infection_pressure = 0
             for n in neighbors:
                 if n["detected_infected_trees"] > 0:
-                    infection_pressure += 0.88
+                    infection_pressure += 0.5
                 elif n["risk"] == "high":
-                    infection_pressure += n["risk_score"] * 0.68
+                    infection_pressure += n["risk_score"] * 0.4
 
             humidity = cell["factors"]["humidity (%)"]
             soil = cell["factors"]["soil_moisture (m³/m³)"]
 
             if cell["detected_infected_trees"] > 0:
-                base_risk += 0.2
+                base_risk += 0.1
 
             env_factor = 0
             if humidity > 80:
@@ -81,13 +89,11 @@ def simulate_future_heatmap(heatmap, weeks=1):
 
 def simulate_future_steps(initial_heatmap, steps=11):
     maps = []
-    current = copy.deepcopy(initial_heatmap)
+    current = initial_heatmap
 
-    maps.append(copy.deepcopy(current))
-
-    for i in range(steps):
-        current = simulate_future_heatmap(current, weeks=i + 1)
-        maps.append(copy.deepcopy(current))
+    for _ in range(steps):
+        current = simulate_future_heatmap(current, weeks=1)
+        maps.append(current)
 
     return maps
 

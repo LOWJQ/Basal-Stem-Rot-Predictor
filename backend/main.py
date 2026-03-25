@@ -1,12 +1,11 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 import cv2
 import numpy as np
 import uuid
-import time
 
-from services.simulate_future_heatmap import grid_to_risk_map, simulate_future_heatmap
+from services.simulate_future_heatmap import grid_to_risk_map
 from services.env_interpolation import interpolate_env, sample_environment
 from services.geo_utils import generate_grid_coordinates
 from services.image_processing import detect_infected
@@ -14,12 +13,21 @@ from services.risk_analysis import generate_risk_map, generate_heatmap_grid
 from services.visualization import draw_heatmap
 from services.environmental_data import get_env_cached
 from services.simulate_future_heatmap import simulate_future_steps
-from services.video_generator import create_video
 
 app = Flask(__name__)
+
+
+@app.route("/outputs/<path:filename>")
+def serve_outputs(filename):
+    return send_from_directory("output", filename)
+
+
 CORS(app)
 
 BASE_DIR = os.path.dirname(__file__)
+
+FRAMES_DIR = os.path.join(BASE_DIR, "output", "frames")
+os.makedirs(FRAMES_DIR, exist_ok=True)
 
 
 @app.route("/", methods=["GET"])
@@ -35,7 +43,7 @@ def predict():
     lon = request.form.get("lon")
 
     if not lat or not lon:
-        lat, lon = 3.1390, 101.6869  # Kuala Lumpur
+        lat, lon = 3.1390, 101.6869
     else:
         try:
             lat = float(lat)
@@ -46,7 +54,7 @@ def predict():
     altitude = request.form.get("altitude")
 
     if not altitude:
-        altitude = 50  # default (meters)
+        altitude = 50
     else:
         try:
             altitude = float(altitude)
@@ -81,7 +89,6 @@ def predict():
 
         file.stream.seek(0)
         file_bytes = np.frombuffer(file.read(), np.uint8)
-
         img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
         if img is None:
@@ -94,7 +101,6 @@ def predict():
         cv2.imwrite(temp_path, img)
 
         infected_points = detect_infected(temp_path)
-
         grid_coords = generate_grid_coordinates(lat, lon, altitude)
 
         samples = sample_environment(
@@ -109,7 +115,12 @@ def predict():
             risk_map, env_grid, infected_points, grid_coords
         )
 
-        future_steps = [heatmap] + simulate_future_steps(heatmap, steps=11)
+        heatmap_now = [
+            [{**cell, "factors": dict(cell["factors"])} for cell in row]
+            for row in heatmap
+        ]
+
+        future_steps = [heatmap_now] + simulate_future_steps(heatmap_now, steps=11)
 
         frame_paths = []
 
@@ -118,35 +129,29 @@ def predict():
             step_risk_map = grid_to_risk_map(step_heatmap, width, height)
 
             frame_name = f"frame_{idx}_{uuid.uuid4().hex}.jpg"
-            frame_path = os.path.join(BASE_DIR, "output", "heatmap", frame_name)
+            frame_path = os.path.join(FRAMES_DIR, frame_name)
 
             draw_heatmap(
                 temp_path,
                 step_risk_map,
-                [],  
+                [],
                 env_grid,
                 frame_path,
-                week = idx if idx > 0 else "Now", 
+                week=idx if idx > 0 else "Now",
             )
 
             frame_paths.append(frame_path)
 
-        video_name = f"prediction_{int(time.time())}_{uuid.uuid4().hex}.mp4"
-        video_path = os.path.join(BASE_DIR, "output", "heatmap", video_name)
-
-        video_output = create_video(frame_paths, video_path)
-
-        for path in frame_paths:
-            if os.path.exists(path):
-                os.remove(path)
-
         output_name = f"output_{uuid.uuid4().hex}.jpg"
-        output_path = os.path.join(BASE_DIR, "output", "heatmap", output_name)
+        output_path = os.path.join(BASE_DIR, "output", output_name)
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        heatmap_now = heatmap
+        risk_map_now = grid_to_risk_map(heatmap_now, width, height)
 
         output_image = draw_heatmap(
             temp_path,
-            risk_map,
+            risk_map_now,
             infected_points,
             env_grid,
             output_path,
@@ -159,6 +164,15 @@ def predict():
         avg_humidity = np.mean([v["humidity"] for v in samples.values()])
         avg_temp = np.mean([v["temperature"] for v in samples.values()])
 
+        base_url = request.host_url.rstrip("/")
+
+        frame_urls = [
+            f"{base_url}/outputs/frames/{os.path.basename(p)}"
+            for p in frame_paths
+        ]
+
+        output_url = f"{base_url}/outputs/{os.path.basename(output_path)}"
+
         return jsonify(
             {
                 "status": "success",
@@ -168,12 +182,12 @@ def predict():
                     "heatmap": heatmap,
                     "environment_summary": {
                         "sampled_points": len(samples),
-                        "avg_soil_moisture": float(avg_soil),
-                        "avg_humidity": float(avg_humidity),
-                        "avg_temperature": float(avg_temp),
+                        "avg_soil_moisture": round(float(avg_soil), 3),
+                        "avg_humidity": round(float(avg_humidity), 3),
+                        "avg_temperature": round(float(avg_temp), 3),
                     },
-                    "output_image": output_image,
-                    "future_output_image": f"{video_output}?t={int(time.time())}"
+                    "output_image": output_url,
+                    "simulation_frames": frame_urls, 
                 },
             }
         )
