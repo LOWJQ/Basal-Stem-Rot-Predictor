@@ -34,9 +34,9 @@ def simulate_future_heatmap(heatmap, weeks=1):
             infection_pressure = 0
             for n in neighbors:
                 if n["detected_infected_trees"] > 0:
-                    infection_pressure += 0.5
+                    infection_pressure += 1.28
                 elif n["risk"] == "high":
-                    infection_pressure += n["risk_score"] * 0.4
+                    infection_pressure += n["risk_score"] * 1.08
 
             humidity = cell["factors"]["humidity (%)"]
             soil = cell["factors"]["soil_moisture (m³/m³)"]
