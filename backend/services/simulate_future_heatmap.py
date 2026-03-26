@@ -2,7 +2,7 @@ import random
 import cv2
 import numpy as np
 
-from services.risk_analysis import get_risk_label 
+from services.risk_analysis import get_risk_label
 
 
 def simulate_future_heatmap(heatmap, weeks=1):
@@ -38,20 +38,23 @@ def simulate_future_heatmap(heatmap, weeks=1):
             )
 
             humidity = cell["factors"]["humidity (%)"]
-            soil     = cell["factors"]["soil_moisture (m³/m³)"]
-            temp     = cell["factors"]["temperature (°C)"]
+            soil = cell["factors"]["soil_moisture (m³/m³)"]
+            temp = cell["factors"]["temperature (°C)"]
 
             conductivity = 0.0
-            if 26 <= temp <= 32:  conductivity += 0.3
-            if humidity > 80:     conductivity += 0.3
-            if soil > 0.20:       conductivity += 0.4  
+            if 26 <= temp <= 32:
+                conductivity += 0.3
+            if humidity > 80:
+                conductivity += 0.3
+            if soil > 0.20:
+                conductivity += 0.4
 
             own_infected = cell.get("detected_infected_trees", 0)
 
             if own_infected > 0:
-                infection_source_pressure = 0.08 * conductivity * min(own_infected, 5)
+                infection_source_pressure = 0.18 * conductivity * min(own_infected, 5)
             elif neighbour_has_infection:
-                infection_source_pressure = 0.05 * conductivity
+                infection_source_pressure = 0.12 * conductivity
             else:
                 infection_source_pressure = 0.0
 

@@ -53,17 +53,6 @@ def generate_risk_map(infected_points, width, height, env_grid, grid_size=6):
 
         dist = np.maximum(dist, 1)
 
-        grid_y = np.clip((y_coords // cell_h).astype(int), 0, grid_size - 1)
-        grid_x = np.clip((x_coords // cell_w).astype(int), 0, grid_size - 1)
-
-        env_factor = np.zeros_like(risk_map)
-
-        for i in range(grid_size):
-            for j in range(grid_size):
-                mask = (grid_y == i) & (grid_x == j)
-                env = env_grid[i][j]
-                env_factor[mask] = calculate_env_risk(env)
-
         influence = conf * (dist < 25).astype(float)
 
         risk_map += influence

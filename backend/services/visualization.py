@@ -14,20 +14,6 @@ def draw_heatmap(
 
     height, width = img.shape[:2]
 
-    env_map = np.array([[cell["soil_moisture"] for cell in row] for row in env_grid])
-
-    env_map_resized = cv2.resize(
-        env_map, (width, height), interpolation=cv2.INTER_LINEAR
-    )
-
-    env_min = np.min(env_map_resized)
-    env_max = np.max(env_map_resized)
-
-    if env_max > env_min:
-        env_norm = (env_map_resized - env_min) / (env_max - env_min)
-    else:
-        env_norm = env_map_resized
-
     if risk_map.shape != (height, width):
         risk_map = cv2.resize(risk_map, (width, height), interpolation=cv2.INTER_LINEAR)
 
