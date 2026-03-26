@@ -2,6 +2,8 @@ import random
 import cv2
 import numpy as np
 
+from services.risk_analysis import get_risk_label 
+
 
 def simulate_future_heatmap(heatmap, weeks=1):
     rows = len(heatmap)
@@ -54,18 +56,16 @@ def simulate_future_heatmap(heatmap, weeks=1):
                 infection_source_pressure = 0.0
 
             spread_pressure = avg_neighbour * conductivity * 0.15
-            new_risk = base_risk + spread_pressure + infection_source_pressure
+            score = base_risk + spread_pressure + infection_source_pressure
 
             if avg_neighbour < 0.2 and conductivity < 0.3 and own_infected == 0:
-                new_risk *= 0.97
+                score *= 0.97
 
-            new_risk = max(0.0, min(1.0, new_risk))
+            score = max(0.0, min(1.0, score))
 
-            if new_risk > 0.68:   label = "high"
-            elif new_risk > 0.4:  label = "medium"
-            else:                  label = "low"
+            label = get_risk_label(score)
 
-            future[i][j]["risk_score"] = round(new_risk, 4)
+            future[i][j]["risk_score"] = round(score, 4)
             future[i][j]["risk"] = label
 
             future[i][j]["detected_infected_trees"] = own_infected

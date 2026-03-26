@@ -2,6 +2,7 @@ import requests
 import os
 from dotenv import load_dotenv
 import logging
+import time
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -49,15 +50,16 @@ def get_environmental_data(lat, lon):
 
 
 cache = {}
+CACHE_TTL = 900
 
 
 def get_env_cached(lat, lon):
     key = (round(lat, 4), round(lon, 4))
+    now = time.time()
 
-    if key in cache:
-        return cache[key]
+    if key in cache and (now - cache[key]["timestamp"]) < CACHE_TTL:
+        return cache[key]["data"]
 
     data = get_environmental_data(lat, lon)
-    cache[key] = data
-
+    cache[key] = {"data": data, "timestamp": now}
     return data

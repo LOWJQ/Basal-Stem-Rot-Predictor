@@ -1,13 +1,12 @@
 import numpy as np
 
+RISK_HIGH   = 0.68
+RISK_MEDIUM = 0.40
 
-def classify_risk(r):
-    if r < 0.33:
-        return "low"
-    elif r < 0.66:
-        return "medium"
-    else:
-        return "high"
+def get_risk_label(score):
+    if score > RISK_HIGH:   return "high"
+    if score > RISK_MEDIUM: return "medium"
+    return "low"
 
 
 def calculate_env_risk(env):
@@ -109,12 +108,7 @@ def generate_heatmap_grid(
 
             score = max(0.0, min(score, 1.0))
 
-            if score > 0.68:
-                level = "high"
-            elif score > 0.4:
-                level = "medium"
-            else:
-                level = "low"
+            level = get_risk_label(score)
 
             x_center = (x1 + x2) / 2
             y_center = (y1 + y2) / 2

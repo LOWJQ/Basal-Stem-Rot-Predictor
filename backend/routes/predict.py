@@ -1,9 +1,9 @@
-from flask import Blueprint, Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
+from flask import Blueprint, request, jsonify
 import os
 import cv2
 import numpy as np
 import uuid
+import logging
 
 from services.simulate_future_heatmap import grid_to_risk_map
 from services.env_interpolation import interpolate_env, sample_environment
@@ -13,9 +13,10 @@ from services.risk_analysis import generate_risk_map, generate_heatmap_grid
 from services.visualization import draw_heatmap
 from services.environmental_data import get_env_cached
 from services.simulate_future_heatmap import simulate_future_steps
-from services.database import save_scan, init_db
+from services.database import save_scan
 
-init_db()
+
+logger = logging.getLogger(__name__)
 
 predict_bp = Blueprint("predict", __name__)
 
@@ -37,7 +38,7 @@ def predict():
         try:
             lat = float(lat)
             lon = float(lon)
-        except:
+        except ValueError:
             return jsonify({"error": "Invalid latitude/longitude"}), 400
 
     altitude = request.form.get("altitude")
@@ -47,7 +48,7 @@ def predict():
     else:
         try:
             altitude = float(altitude)
-        except:
+        except ValueError:
             return jsonify({"error": "Invalid altitude"}), 400
 
     try:
@@ -73,7 +74,8 @@ def predict():
             img_test = Image.open(file.stream)
             img_test.verify()
             file.stream.seek(0)
-        except:
+        except Exception as e:
+            logger.warning(f"Corrupted image upload attempted: {e}")
             return jsonify({"error": "Corrupted image file"}), 400
 
         file.stream.seek(0)
@@ -97,7 +99,6 @@ def predict():
         )
 
         env_grid = interpolate_env(grid_coords, samples)
-
         risk_map = generate_risk_map(infected_points, width, height, env_grid)
 
         heatmap, flat_heatmap = generate_heatmap_grid(
@@ -112,14 +113,10 @@ def predict():
         future_steps = [heatmap_now] + simulate_future_steps(heatmap_now, steps=11)
 
         frame_paths = []
-
         for idx, step_heatmap in enumerate(future_steps):
-
             step_risk_map = grid_to_risk_map(step_heatmap, width, height)
-
             frame_name = f"frame_{idx}_{uuid.uuid4().hex}.jpg"
             frame_path = os.path.join(FRAMES_DIR, frame_name)
-
             draw_heatmap(
                 temp_path,
                 step_risk_map,
@@ -128,7 +125,6 @@ def predict():
                 frame_path,
                 week=idx if idx > 0 else "Now",
             )
-
             frame_paths.append(frame_path)
 
         output_name = f"output_{uuid.uuid4().hex}.jpg"
@@ -147,6 +143,7 @@ def predict():
         )
 
         if output_image is None:
+            logger.error("draw_heatmap returned None — image processing failed")
             return jsonify({"error": "Failed to process image"}), 400
 
         avg_soil = np.mean([v["soil_moisture"] for v in samples.values()])
@@ -154,20 +151,28 @@ def predict():
         avg_temp = np.mean([v["temperature"] for v in samples.values()])
 
         base_url = request.host_url.rstrip("/")
-
         frame_urls = [
             f"{base_url}/outputs/frames/{os.path.basename(p)}" for p in frame_paths
         ]
-
         output_url = f"{base_url}/outputs/{os.path.basename(output_path)}"
-
         job_id = uuid.uuid4().hex
 
-        save_scan(lat, lon, altitude, infected_points, flat_heatmap, {
-            "avg_soil_moisture": round(float(avg_soil), 3),
-            "avg_humidity": round(float(avg_humidity), 3),
-            "avg_temperature": round(float(avg_temp), 3),
-        })
+        save_scan(
+            lat,
+            lon,
+            altitude,
+            infected_points,
+            flat_heatmap,
+            {
+                "avg_soil_moisture": round(float(avg_soil), 3),
+                "avg_humidity": round(float(avg_humidity), 3),
+                "avg_temperature": round(float(avg_temp), 3),
+            },
+        )
+
+        logger.info(
+            f"Predict success — lat={lat} lon={lon} infected={len(infected_points)} id={job_id}"
+        )
 
         return jsonify(
             {
@@ -192,7 +197,8 @@ def predict():
         )
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.exception(f"Unhandled error in /predict — lat={lat} lon={lon}: {e}")
+        return jsonify({"error": "An internal error occurred. Please try again."}), 500
 
     finally:
         if temp_path and os.path.exists(temp_path):

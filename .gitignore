@@ -1,14 +1,10 @@
 .git/
 
 __pycache__/
-
-# Detection Model
-*.pt
-
-# Temporary files
-backend/output/
-backend/*.jpg
-backend/*.png
-
-# Environment variables
+*.pyc
+*.pyo
 .env
+backend/data/history.db
+backend/output/
+backend/test*.jpg
+*.pt
