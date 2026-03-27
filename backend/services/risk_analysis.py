@@ -1,11 +1,14 @@
 import numpy as np
 
-RISK_HIGH   = 0.68
+RISK_HIGH = 0.68
 RISK_MEDIUM = 0.40
 
+
 def get_risk_label(score):
-    if score > RISK_HIGH:   return "high"
-    if score > RISK_MEDIUM: return "medium"
+    if score > RISK_HIGH:
+        return "high"
+    if score > RISK_MEDIUM:
+        return "medium"
     return "low"
 
 
@@ -114,9 +117,9 @@ def generate_heatmap_grid(
             )
 
             factors = {
-                "soil_moisture (m³/m³)": round(env["soil_moisture"], 3),
-                "humidity (%)": round(env["humidity"], 3),
-                "temperature (°C)": round(env["temperature"], 3),
+                "soil_moisture": round(env["soil_moisture"], 3),
+                "humidity": round(env["humidity"], 3),
+                "temperature": round(env["temperature"], 3),
             }
 
             near_infection = is_near_infection(x_center, y_center, infected_points)
@@ -165,9 +168,9 @@ def generate_explanation(factors, risk_level, near_infection=False):
     reasons = []
     actions = []
 
-    humidity = factors.get("humidity (%)", 0)
-    soil = factors.get("soil_moisture (m³/m³)", 0)
-    temp = factors.get("temperature (°C)", 0)
+    humidity = factors.get("humidity", 0)
+    soil = factors.get("soil_moisture", 0)
+    temp = factors.get("temperature", 0)
 
     if soil > 0.2:
         reasons.append("High soil moisture promotes fungal growth")

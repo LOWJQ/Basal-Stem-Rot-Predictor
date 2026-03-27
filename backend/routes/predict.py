@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from datetime import datetime
 import os
 import cv2
 import numpy as np
@@ -6,7 +7,11 @@ import uuid
 import logging
 
 from services.simulate_future_heatmap import grid_to_risk_map
-from services.env_interpolation import interpolate_env, sample_environment
+from services.env_interpolation import (
+    interpolate_env,
+    sample_environment,
+    apply_infection_env_variation,
+)
 from services.geo_utils import generate_grid_coordinates
 from services.image_processing import detect_infected
 from services.risk_analysis import generate_risk_map, generate_heatmap_grid
@@ -99,6 +104,9 @@ def predict():
         )
 
         env_grid = interpolate_env(grid_coords, samples)
+        env_grid = apply_infection_env_variation(
+            env_grid, infected_points, width, height
+        )
         risk_map = generate_risk_map(infected_points, width, height, env_grid)
 
         heatmap, flat_heatmap = generate_heatmap_grid(
@@ -110,7 +118,7 @@ def predict():
             for row in heatmap
         ]
 
-        future_steps = [heatmap_now] + simulate_future_steps(heatmap_now, steps=11)
+        future_steps = [heatmap_now] + simulate_future_steps(heatmap_now, steps=12)
 
         frame_paths = []
         for idx, step_heatmap in enumerate(future_steps):
@@ -157,18 +165,42 @@ def predict():
         output_url = f"{base_url}/outputs/{os.path.basename(output_path)}"
         job_id = uuid.uuid4().hex
 
-        save_scan(
+        environment_summary = {
+            "avg_soil_moisture": round(float(avg_soil), 3),
+            "avg_humidity": round(float(avg_humidity), 3),
+            "avg_temperature": round(float(avg_temp), 3),
+        }
+
+        response_data = {
+            "image_size": {"width": width, "height": height},
+            "infected_points": infected_points,
+            "heatmap": flat_heatmap,
+            "heatmap_grid": heatmap,
+            "grid_coordinates": grid_coords,
+            "environment_summary": {
+                "sampled_points": len(samples),
+                **environment_summary,
+            },
+            "output_image": output_url,
+            "simulation_frames": frame_urls,
+            "id": job_id,
+        }
+
+        default_title = f"Scan {datetime.now().strftime('%b %d, %I:%M %p')}"
+
+        scan_id = save_scan(
             lat,
             lon,
             altitude,
             infected_points,
             flat_heatmap,
-            {
-                "avg_soil_moisture": round(float(avg_soil), 3),
-                "avg_humidity": round(float(avg_humidity), 3),
-                "avg_temperature": round(float(avg_temp), 3),
-            },
+            environment_summary,
+            payload=response_data,
+            title=default_title,
         )
+
+        response_data["history_id"] = scan_id
+        response_data["title"] = default_title
 
         logger.info(
             f"Predict success — lat={lat} lon={lon} infected={len(infected_points)} id={job_id}"
@@ -177,22 +209,7 @@ def predict():
         return jsonify(
             {
                 "status": "success",
-                "data": {
-                    "image_size": {"width": width, "height": height},
-                    "infected_points": infected_points,
-                    "heatmap": flat_heatmap,
-                    "heatmap_grid": heatmap,
-                    "grid_coordinates": grid_coords,
-                    "environment_summary": {
-                        "sampled_points": len(samples),
-                        "avg_soil_moisture": round(float(avg_soil), 3),
-                        "avg_humidity": round(float(avg_humidity), 3),
-                        "avg_temperature": round(float(avg_temp), 3),
-                    },
-                    "output_image": output_url,
-                    "simulation_frames": frame_urls,
-                    "id": job_id,
-                },
+                "data": response_data,
             }
         )
 

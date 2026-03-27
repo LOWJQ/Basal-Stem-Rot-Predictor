@@ -102,3 +102,43 @@ def interpolate_env(grid_coords, samples):
             }
 
     return env_grid
+
+def apply_infection_env_variation(env_grid, infected_points, image_width, image_height):
+    if not infected_points:
+        return env_grid
+
+    grid_size = len(env_grid)
+    adjusted = [[dict(cell) for cell in row] for row in env_grid]
+
+    for i in range(grid_size):
+        for j in range(grid_size):
+            cell_center_x = ((j + 0.5) / grid_size) * image_width
+            cell_center_y = ((i + 0.5) / grid_size) * image_height
+
+            min_dist = min(
+                ((pt["x"] - cell_center_x) ** 2 + (pt["y"] - cell_center_y) ** 2) ** 0.5
+                for pt in infected_points
+            )
+
+            proximity = max(0.0, 1.0 - (min_dist / 220.0))
+            row_wave = np.sin((i + 1) * 1.17 + (j + 1) * 0.63)
+            col_wave = np.cos((i + 1) * 0.71 - (j + 1) * 1.11)
+
+            temp_delta = (0.9 * proximity) + (0.18 * row_wave)
+            humidity_delta = (5.5 * proximity) + (1.2 * col_wave)
+            soil_delta = (0.035 * proximity) + (0.006 * row_wave)
+
+            adjusted[i][j]["temperature"] = round(
+                min(40, max(15, adjusted[i][j]["temperature"] + temp_delta)),
+                4,
+            )
+            adjusted[i][j]["humidity"] = round(
+                min(100, max(0, adjusted[i][j]["humidity"] + humidity_delta)),
+                4,
+            )
+            adjusted[i][j]["soil_moisture"] = round(
+                min(1, max(0, adjusted[i][j]["soil_moisture"] + soil_delta)),
+                4,
+            )
+
+    return adjusted
