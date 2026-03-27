@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Check, LoaderCircle, MessageSquare, Pencil, Settings, Trash2, X } from 'lucide-react'
+import {
+  LoaderCircle,
+  MessageSquare,
+  MoreHorizontal,
+  Pencil,
+  Settings,
+  Trash2,
+} from 'lucide-react'
 import UploadSection from '../services/UploadSection'
 import {
   deleteAllHistoryScans,
@@ -47,6 +54,8 @@ export default function Home() {
   const [historyActionLoadingId, setHistoryActionLoadingId] = useState(null)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isDeletingAllHistory, setIsDeletingAllHistory] = useState(false)
+  const [openMenuId, setOpenMenuId] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
 
   const activeHistoryId = result?.history_id ?? historySummary?.id ?? null
 
@@ -67,12 +76,22 @@ export default function Home() {
     loadHistory()
   }, [])
 
+  useEffect(() => {
+    const handleWindowClick = () => {
+      setOpenMenuId(null)
+    }
+
+    window.addEventListener('click', handleWindowClick)
+    return () => window.removeEventListener('click', handleWindowClick)
+  }, [])
+
   const resetToNewAnalysis = () => {
     setResult(null)
     setHistorySummary(null)
     setError('')
     setIsLoading(false)
     setIsOpeningHistory(false)
+    setOpenMenuId(null)
   }
 
   const handleSubmit = async (formData) => {
@@ -93,6 +112,7 @@ export default function Home() {
 
   const handleOpenHistory = async (scanId) => {
     try {
+      setOpenMenuId(null)
       setIsOpeningHistory(true)
       setError('')
       setResult(null)
@@ -117,18 +137,27 @@ export default function Home() {
     event.stopPropagation()
     setEditingHistoryId(scan.id)
     setEditingTitle(scan.title || formatHistoryTitle(scan))
+    setOpenMenuId(null)
   }
 
   const handleCancelRename = () => {
+    setOpenMenuId(null)
     setEditingHistoryId(null)
     setEditingTitle('')
   }
 
-  const handleSaveRename = async (event, scanId) => {
-    event.stopPropagation()
-
+  const handleSaveRename = async (scanId) => {
     const trimmedTitle = editingTitle.trim()
-    if (!trimmedTitle) return
+    if (!trimmedTitle) {
+      handleCancelRename()
+      return
+    }
+
+    const currentItem = historyItems.find((item) => item.id === scanId)
+    if (currentItem && trimmedTitle === formatHistoryTitle(currentItem)) {
+      handleCancelRename()
+      return
+    }
 
     try {
       setHistoryActionLoadingId(scanId)
@@ -151,11 +180,16 @@ export default function Home() {
     }
   }
 
-  const handleDeleteHistory = async (event, scanId) => {
+  const handleRequestDeleteHistory = (event, item) => {
     event.stopPropagation()
+    setOpenMenuId(null)
+    setDeleteTarget(item)
+  }
 
-    const confirmed = window.confirm('Delete this history entry?')
-    if (!confirmed) return
+  const handleConfirmDeleteHistory = async () => {
+    if (!deleteTarget) return
+
+    const scanId = deleteTarget.id
 
     try {
       setHistoryActionLoadingId(scanId)
@@ -173,6 +207,9 @@ export default function Home() {
       if (editingHistoryId === scanId) {
         handleCancelRename()
       }
+
+      setOpenMenuId(null)
+      setDeleteTarget(null)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -202,7 +239,22 @@ export default function Home() {
     }
   }
 
+  const handleToggleMenu = (event, scanId) => {
+    event.stopPropagation()
+    setOpenMenuId((current) => (current === scanId ? null : scanId))
+  }
 
+  const handleRenameKeyDown = async (event, scanId) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      await handleSaveRename(scanId)
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      handleCancelRename()
+    }
+  }
 
   return (
     <div className="app-layout">
@@ -222,7 +274,7 @@ export default function Home() {
                 historyItems.map((item) => (
                   <div
                     key={item.id}
-                    className={`sidebar-history-row ${activeHistoryId === item.id ? 'active' : ''}`}
+                    className={`sidebar-history-row ${activeHistoryId === item.id ? 'active' : ''} ${openMenuId === item.id ? 'menu-open' : ''}`}
                   >
                     {editingHistoryId === item.id ? (
                       <>
@@ -231,32 +283,13 @@ export default function Home() {
                           value={editingTitle}
                           onChange={(e) => setEditingTitle(e.target.value)}
                           onClick={(e) => e.stopPropagation()}
+                          onBlur={() => {
+                            handleSaveRename(item.id)
+                          }}
+                          onKeyDown={(e) => handleRenameKeyDown(e, item.id)}
                           maxLength={80}
                           autoFocus
                         />
-
-                        <div className="sidebar-item-actions">
-                          <button
-                            type="button"
-                            className="sidebar-icon-button"
-                            onClick={(e) => handleSaveRename(e, item.id)}
-                            disabled={historyActionLoadingId === item.id}
-                          >
-                            <Check size={14} />
-                          </button>
-
-                          <button
-                            type="button"
-                            className="sidebar-icon-button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleCancelRename()
-                            }}
-                            disabled={historyActionLoadingId === item.id}
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
                       </>
                     ) : (
                       <>
@@ -272,26 +305,43 @@ export default function Home() {
                         <div className="sidebar-item-actions">
                           <button
                             type="button"
-                            className="sidebar-icon-button"
-                            onClick={(e) => handleStartRename(e, item)}
+                            className="sidebar-icon-button menu-trigger"
+                            onClick={(e) => handleToggleMenu(e, item.id)}
                             disabled={historyActionLoadingId === item.id}
                           >
-                            <Pencil size={14} />
+                            <MoreHorizontal size={14} />
                           </button>
 
-                          <button
-                            type="button"
-                            className="sidebar-icon-button danger"
-                            onClick={(e) => handleDeleteHistory(e, item.id)}
-                            disabled={historyActionLoadingId === item.id}
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          {openMenuId === item.id ? (
+                            <div
+                              className="sidebar-context-menu"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                className="sidebar-context-item"
+                                onClick={(e) => handleStartRename(e, item)}
+                              >
+                                <Pencil size={14} />
+                                <span>Rename</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                className="sidebar-context-item danger"
+                                onClick={(e) => handleRequestDeleteHistory(e, item)}
+                              >
+                                <Trash2 size={14} />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       </>
                     )}
                   </div>
                 ))
+
 
               ) : (
                 <div className="sidebar-state">No saved analyses yet.</div>
@@ -382,6 +432,42 @@ export default function Home() {
                   {isDeletingAllHistory ? 'Deleting...' : 'Delete all history'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteTarget ? (
+        <div className="settings-modal-backdrop" onClick={() => setDeleteTarget(null)}>
+          <div
+            className="delete-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="delete-modal-body">
+              <h2>Delete history?</h2>
+              <p>
+                This will delete <strong>{formatHistoryTitle(deleteTarget)}</strong>.
+              </p>
+            </div>
+
+            <div className="delete-modal-actions">
+              <button
+                type="button"
+                className="delete-cancel-button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={historyActionLoadingId === deleteTarget.id}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="delete-confirm-button"
+                onClick={handleConfirmDeleteHistory}
+                disabled={historyActionLoadingId === deleteTarget.id}
+              >
+                {historyActionLoadingId === deleteTarget.id ? 'Deleting...' : 'Delete'}
+              </button>
             </div>
           </div>
         </div>
