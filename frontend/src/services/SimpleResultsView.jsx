@@ -37,18 +37,74 @@ function formatMetric(value, digits = 1) {
   return numericValue.toFixed(digits)
 }
 
-function buildRiskNarrative(cell) {
+function formatPercent(value, digits = 1) {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) return 'N/A'
+  return `${(numericValue * 100).toFixed(digits)}%`
+}
+
+function getPointsInCell(cell, infectedPoints, imageSize, gridSize = 6) {
+  if (!cell || !Array.isArray(infectedPoints) || !infectedPoints.length || !imageSize) {
+    return []
+  }
+
+  const width = Number(imageSize.width)
+  const height = Number(imageSize.height)
+
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return []
+  }
+
+  const cellWidth = Math.max(1, Math.floor(width / gridSize))
+  const cellHeight = Math.max(1, Math.floor(height / gridSize))
+
+  const x1 = cell.x * cellWidth
+  const y1 = cell.y * cellHeight
+  const x2 = cell.x === gridSize - 1 ? width : (cell.x + 1) * cellWidth
+  const y2 = cell.y === gridSize - 1 ? height : (cell.y + 1) * cellHeight
+
+  return infectedPoints.filter((point) => (
+    Number(point.x) >= x1 &&
+    Number(point.x) < x2 &&
+    Number(point.y) >= y1 &&
+    Number(point.y) < y2
+  ))
+}
+
+function buildInfectionNarrative(pointsInCell) {
+  if (!pointsInCell.length) return null
+
+  const confidenceValues = pointsInCell
+    .map((point) => Number(point.conf))
+    .filter((value) => Number.isFinite(value))
+
+  if (!confidenceValues.length) {
+    return `${pointsInCell.length} infected tree${pointsInCell.length > 1 ? 's were' : ' was'} detected here, increasing local spread risk.`
+  }
+
+  if (confidenceValues.length === 1) {
+    return `1 infected tree was detected here with ${formatPercent(confidenceValues[0])} confidence, increasing local spread risk.`
+  }
+
+  const averageConfidence =
+    confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length
+
+  return `${pointsInCell.length} infected trees were detected here with ${formatPercent(averageConfidence)} average confidence, increasing local spread risk.`
+}
+
+function buildRiskNarrative(cell, infectedPoints, imageSize) {
   if (!cell) return []
 
   const points = []
   const temperature = Number(cell.factors?.temperature)
   const humidity = Number(cell.factors?.humidity)
   const soilMoisture = Number(cell.factors?.soil_moisture)
+  const infectionNarrative = buildInfectionNarrative(
+    getPointsInCell(cell, infectedPoints, imageSize)
+  )
 
-  if (cell.detected_infected_trees > 0) {
-    points.push(
-      `${cell.detected_infected_trees} infected tree${cell.detected_infected_trees > 1 ? 's were' : ' was'} detected here, increasing local spread risk.`
-    )
+  if (infectionNarrative) {
+    points.push(infectionNarrative)
   } else if (cell.infection_nearby) {
     points.push('Nearby infection increases the chance of spread into this zone.')
   }
@@ -101,7 +157,7 @@ function buildContextActions(cell) {
     }
 
     actions.push('Reassess this zone within 3-5 days.')
-    return actions.slice(0, 2)
+    return actions.slice(0, 3)
   }
 
   if (cell.risk === 'medium') {
@@ -113,12 +169,20 @@ function buildContextActions(cell) {
       actions.push('Inspect nearby trees for early infection symptoms.')
     }
 
+    if (cell.infection_nearby) {
+      actions.push('Monitor adjacent areas closely for outward spread.')
+    }
+
     actions.push('Schedule a follow-up scan within the next few days.')
-    return actions.slice(0, 2)
+    return actions.slice(0, 3)
   }
 
   if (cell.detected_infected_trees > 0) {
     actions.push('Isolate infected trees in this zone immediately.')
+  }
+
+  if (cell.infection_nearby) {
+    actions.push('Inspect surrounding areas immediately to contain nearby spread.')
   }
 
   if (Number.isFinite(humidity) && humidity >= 80) {
@@ -129,7 +193,7 @@ function buildContextActions(cell) {
     actions.push(`Prioritize this warm zone (${formatMetric(temperature)}°C) for urgent treatment.`)
   }
 
-  return actions.slice(0, 2)
+  return actions.slice(0, 3)
 }
 
 function getMetricSignal(metric, value) {
@@ -258,7 +322,7 @@ export default function SimpleResultsView({ result }) {
   const [detailView, setDetailView] = useState('overview')
 
   const simulationImage = result.simulation_frames[selectedWeek]
-  const visibleNarrative = buildRiskNarrative(selectedCell)
+  const visibleNarrative = buildRiskNarrative(selectedCell, result.infected_points, result.image_size)
   const riskHeadingLines = formatRiskHeading(selectedCell?.risk)
   const visibleActions = buildContextActions(selectedCell)
 

@@ -9,9 +9,6 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     Image,
-    ListFlowable,
-    ListItem,
-    PageBreak,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -30,6 +27,12 @@ def _format_value(value, digits=2):
     if value is None:
         return "N/A"
     return f"{float(value):.{digits}f}"
+
+
+def _format_generated_date(value):
+    if not value:
+        return "N/A"
+    return str(value).split("T")[0]
 
 
 def _styles():
@@ -79,6 +82,37 @@ def _styles():
             fontSize=9,
             leading=12,
             textColor=colors.HexColor("#4B5563"),
+            wordWrap="CJK",
+        ),
+        "table_label": ParagraphStyle(
+            "TableLabel",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=8.5,
+            leading=11,
+            textColor=colors.HexColor("#111827"),
+            wordWrap="CJK",
+        ),
+        "table_value": ParagraphStyle(
+            "TableValue",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=8.5,
+            leading=11,
+            textColor=colors.HexColor("#1F2937"),
+            wordWrap="CJK",
+        ),
+        "bullet": ParagraphStyle(
+            "Bullet",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=8.8,
+            leading=11.5,
+            textColor=colors.HexColor("#1F2937"),
+            leftIndent=12,
+            bulletIndent=0,
+            spaceAfter=2,
+            wordWrap="CJK",
         ),
     }
 
@@ -89,7 +123,7 @@ def _summary_table(report, styles):
     confidence_range = summary.get("detection_confidence_range") or {}
 
     rows = [
-        ["Title", report.get("title", "Untitled report"), "Generated", report.get("generated_at", "N/A")],
+        ["Title", report.get("title", "Untitled report"), "Generated Date", _format_generated_date(report.get("generated_at"))],
         ["Risk band", summary.get("risk_band", "N/A"), "Average risk", _format_percent(summary.get("average_risk_score"))],
         ["Infected trees", str(summary.get("infected_tree_count", "N/A")), "High-risk areas", str(summary.get("high_risk_cells", "N/A"))],
         ["Latitude", str(location.get("lat", "N/A")), "Longitude", str(location.get("lon", "N/A"))],
@@ -99,17 +133,22 @@ def _summary_table(report, styles):
         ["Avg soil moisture", _format_value(summary.get("average_soil_moisture"), 3), "Simulation trend", report.get("simulation", {}).get("trend", "N/A")],
     ]
 
-    table = Table(rows, colWidths=[28 * mm, 58 * mm, 32 * mm, 58 * mm])
+    formatted_rows = [
+        [
+            Paragraph(str(label_left), styles["table_label"]),
+            Paragraph(str(value_left), styles["table_value"]),
+            Paragraph(str(label_right), styles["table_label"]),
+            Paragraph(str(value_right), styles["table_value"]),
+        ]
+        for label_left, value_left, label_right, value_right in rows
+    ]
+
+    table = Table(formatted_rows, colWidths=[24 * mm, 46 * mm, 28 * mm, 78 * mm])
     table.setStyle(
         TableStyle(
             [
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F9FAFB")),
                 ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#1F2937")),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-                ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("LEADING", (0, 0), (-1, -1), 12),
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D1D5DB")),
                 ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.white, colors.HexColor("#FCFCFD")]),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -123,13 +162,12 @@ def _summary_table(report, styles):
 
 def _bullet_list(items, styles):
     if not items:
-        return Paragraph("No data available.", styles["small"])
+        return [Paragraph("No data available.", styles["small"])]
 
-    bullets = [
-        ListItem(Paragraph(str(item), styles["body"]), leftIndent=8)
+    return [
+        Paragraph(str(item), styles["bullet"], bulletText="•")
         for item in items
     ]
-    return ListFlowable(bullets, bulletType="bullet", start="circle", leftIndent=14)
 
 
 def _top_risk_area_lines(report):
@@ -144,20 +182,7 @@ def _top_risk_area_lines(report):
 
 
 def _recommendation_lines(report):
-    lines = []
-    for entry in report.get("recommendation_areas", []):
-        action = entry.get("action", "No action specified")
-        areas = entry.get("areas", [])
-        if len(areas) > 5:
-            lines.append(action)
-            continue
-
-        area_labels = ", ".join(
-            f"{area.get('area')} [Lat {area.get('lat')}, Lon {area.get('lon')}]"
-            for area in areas
-        )
-        lines.append(f"{action} at {area_labels}" if area_labels else action)
-    return lines
+    return report.get("recommendations", []) or ["No action specified"]
 
 
 def _resolve_output_image_path(report):
@@ -204,20 +229,19 @@ def build_report_pdf(report):
 
     story.append(_summary_table(report, styles))
 
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 8))
     story.append(Paragraph("Key Findings", styles["section"]))
-    story.append(_bullet_list(report.get("key_findings", []), styles))
+    story.extend(_bullet_list(report.get("key_findings", []), styles))
 
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 8))
     story.append(Paragraph("Recommendations", styles["section"]))
-    story.append(_bullet_list(_recommendation_lines(report), styles))
+    story.extend(_bullet_list(_recommendation_lines(report), styles))
 
-    story.append(PageBreak())
-
+    story.append(Spacer(1, 8))
     story.append(Paragraph("Top Risk Areas", styles["section"]))
-    story.append(_bullet_list(_top_risk_area_lines(report), styles))
+    story.extend(_bullet_list(_top_risk_area_lines(report), styles))
 
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 8))
     story.append(Paragraph("Simulation", styles["section"]))
     simulation = report.get("simulation", {})
     simulation_lines = [
@@ -226,7 +250,7 @@ def build_report_pdf(report):
         f"Average risk at end: {_format_percent(simulation.get('average_risk_end'))}",
         f"Trend: {simulation.get('trend', 'N/A')}",
     ]
-    story.append(_bullet_list(simulation_lines, styles))
+    story.extend(_bullet_list(simulation_lines, styles))
 
     doc.build(story)
     buffer.seek(0)

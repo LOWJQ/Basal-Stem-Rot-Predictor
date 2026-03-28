@@ -38,6 +38,10 @@ export function getHistoryReportPdfUrl(scanId) {
   return `${API_BASE}/history/${scanId}/report/pdf`
 }
 
+export function getHistoryReportExcelUrl(scanId) {
+  return `${API_BASE}/history/${scanId}/report/excel`
+}
+
 export async function renameHistoryScan(scanId, title) {
   const response = await fetch(`${API_BASE}/history/${scanId}`, {
     method: 'PATCH',

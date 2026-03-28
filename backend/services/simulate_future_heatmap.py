@@ -80,7 +80,7 @@ def simulate_future_heatmap(heatmap, weeks=1):
                 self_boost = 0.0
 
             if nearby_infections > 0:
-                infection_spread = 0.009 * min(nearby_infections, 3) * env_factor
+                infection_spread = 0.011 * min(nearby_infections, 3) * env_factor
             else:
                 infection_spread = 0.0
 
@@ -97,7 +97,7 @@ def simulate_future_heatmap(heatmap, weeks=1):
             score = base_risk + (self_boost + infection_spread + risk_diffusion) * growth_resistance
 
             # Cap weekly change so the simulation reads as progressive rather than explosive.
-            max_step_up = 0.05 if own_infected > 0 else 0.034
+            max_step_up = 0.055 if own_infected > 0 else 0.038
             max_step_down = 0.02
             score = min(score, base_risk + max_step_up)
             score = max(score, base_risk - max_step_down)

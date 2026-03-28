@@ -1,4 +1,4 @@
-import { getHistoryReportPdfUrl } from './api'
+import { getHistoryReportExcelUrl, getHistoryReportPdfUrl } from './api'
 
 function formatValue(value, digits = 2) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
@@ -46,12 +46,20 @@ export default function ReportPreviewView({ report, historyId }) {
         {historyId ? (
           <div className="report-preview-actions">
             <a
-              className="report-preview-download"
+              className="report-preview-download report-preview-download-secondary"
               href={getHistoryReportPdfUrl(historyId)}
               target="_blank"
               rel="noreferrer"
             >
               Download PDF
+            </a>
+            <a
+              className="report-preview-download report-preview-download-secondary"
+              href={getHistoryReportExcelUrl(historyId)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Download Data in Excel
             </a>
           </div>
         ) : null}

@@ -1095,6 +1095,9 @@ input {
 
 .report-preview-actions {
   margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .report-preview-download {
@@ -1111,6 +1114,16 @@ input {
 
 .report-preview-download:hover {
   background: #1f1f1f;
+}
+
+.report-preview-download-secondary {
+  background: #ffffff;
+  color: #111111;
+  border: 1px solid var(--border-soft);
+}
+
+.report-preview-download-secondary:hover {
+  background: #f5f5f5;
 }
 
 .report-preview-grid {

@@ -7,6 +7,7 @@ from services.database import (
     delete_all_scans,
 )
 from services.pdf_export import build_report_pdf
+from services.excel_export import build_report_excel
 
 history_bp = Blueprint("history", __name__)
 
@@ -56,6 +57,29 @@ def history_report_pdf(scan_id):
     return send_file(
         pdf_buffer,
         mimetype="application/pdf",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+@history_bp.route("/history/<int:scan_id>/report/excel", methods=["GET"])
+def history_report_excel(scan_id):
+    scan = get_scan(scan_id)
+    if scan is None:
+        return jsonify({"error": "History entry not found"}), 404
+
+    payload = scan.get("payload") or {}
+    report = payload.get("report")
+    heatmap = payload.get("heatmap")
+
+    if report is None or heatmap is None:
+        return jsonify({"error": "Report data not available for this scan"}), 404
+
+    excel_buffer = build_report_excel(payload, report)
+    filename = f"bsr-data-{scan_id}.xlsx"
+    return send_file(
+        excel_buffer,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         as_attachment=True,
         download_name=filename,
     )
