@@ -66,27 +66,41 @@ def simulate_future_heatmap(heatmap, weeks=1):
 
             env_factor = 1.0
             if 26 <= temp <= 32:
-                env_factor += 0.1
+                env_factor += 0.06
             if humidity > 80:
-                env_factor += 0.1
+                env_factor += 0.06
             if soil > 0.20:
-                env_factor += 0.15
+                env_factor += 0.1
 
             own_infected = cell.get("detected_infected_trees", 0)
 
             if own_infected > 0:
-                self_boost = 0.02 * env_factor * min(own_infected, 3)
+                self_boost = 0.014 * env_factor * min(own_infected, 3)
             else:
                 self_boost = 0.0
 
             if nearby_infections > 0:
-                infection_spread = 0.015 * nearby_infections * env_factor
+                infection_spread = 0.009 * min(nearby_infections, 3) * env_factor
             else:
                 infection_spread = 0.0
 
-            risk_diffusion = (max_neighbour_risk - base_risk) * 0.2 * env_factor
+            risk_diffusion = (avg_neighbour - base_risk) * 0.1 * env_factor
 
-            score = base_risk + self_boost + infection_spread + risk_diffusion
+            # Higher-risk cells can still grow, but each step should feel gradual.
+            if base_risk >= 0.75:
+                growth_resistance = 0.55
+            elif base_risk >= 0.5:
+                growth_resistance = 0.72
+            else:
+                growth_resistance = 1.0
+
+            score = base_risk + (self_boost + infection_spread + risk_diffusion) * growth_resistance
+
+            # Cap weekly change so the simulation reads as progressive rather than explosive.
+            max_step_up = 0.05 if own_infected > 0 else 0.034
+            max_step_down = 0.02
+            score = min(score, base_risk + max_step_up)
+            score = max(score, base_risk - max_step_down)
 
             score = max(0.0, min(1.0, score))
 

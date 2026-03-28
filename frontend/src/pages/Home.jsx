@@ -383,10 +383,16 @@ export default function Home() {
             ) : (
               <>
                 <p className="hero-kicker">Palm oil disease analysis</p>
-                <h1 className="hero-title">Analyze from one image</h1>
+                <h1 className="hero-title">From detection to decision in one scan</h1>
                 <p className="hero-subtitle">
                   Upload an image and location to generate a risk map.
                 </p>
+                <div className="hero-trust-row">
+                  <span className="hero-trust-pill">AI-powered prediction</span>
+                  <span className="hero-trust-text">
+                    YOLO-V8-based infected tree detection combined with live environmental data
+                  </span>
+                </div>
 
                 <UploadSection
                   onSubmit={handleSubmit}

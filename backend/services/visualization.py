@@ -31,7 +31,8 @@ def draw_heatmap(
 
     for p in current_points:
         x, y = int(p["x"]), int(p["y"])
-        cv2.circle(overlay, (x, y), 5, (255, 0, 0), -1)
+        cv2.circle(overlay, (x, y), 8, (255, 255, 255), -1)
+        cv2.circle(overlay, (x, y), 6, (255, 0, 0), -1)
 
     if week is not None:
         cv2.putText(
@@ -57,13 +58,18 @@ def apply_custom_colormap(heatmap):
     g = np.zeros_like(heatmap)
     b = np.zeros_like(heatmap)
 
-    mask1 = heatmap < 0.5
-    r[mask1] = heatmap[mask1] / 0.5
-    g[mask1] = 1.0
+    low_mask = heatmap < 0.4
+    r[low_mask] = 0.08 + (heatmap[low_mask] / 0.4) * 0.22
+    g[low_mask] = 0.72 + (heatmap[low_mask] / 0.4) * 0.24
 
-    mask2 = heatmap >= 0.5
-    r[mask2] = 1.0
-    g[mask2] = 1.0 - ((heatmap[mask2] - 0.5) / 0.5)
+    medium_mask = (heatmap >= 0.4) & (heatmap < 0.72)
+    r[medium_mask] = 0.92 + ((heatmap[medium_mask] - 0.4) / 0.32) * 0.08
+    g[medium_mask] = 0.58 - ((heatmap[medium_mask] - 0.4) / 0.32) * 0.18
+
+    high_mask = heatmap >= 0.72
+    r[high_mask] = 0.92 + ((heatmap[high_mask] - 0.72) / 0.28) * 0.08
+    g[high_mask] = 0.16 - ((heatmap[high_mask] - 0.72) / 0.28) * 0.16
+    g[high_mask] = np.clip(g[high_mask], 0.0, 0.16)
 
     color = np.stack([b, g, r], axis=-1)
 

@@ -48,15 +48,14 @@ def generate_risk_map(infected_points, width, height, env_grid, grid_size=6):
     for point in infected_points:
         cx = float(point["x"])
         cy = float(point["y"])
-        conf = float(point["conf"]) * 4.0
+        conf = float(point["conf"]) * 1.45
 
         dx = x_coords - cx
         dy = y_coords - cy
         dist = np.sqrt(dx**2 + dy**2)
 
-        dist = np.maximum(dist, 1)
-
-        influence = conf * (dist < 25).astype(float)
+        sigma = 54.0
+        influence = conf * np.exp(-(dist**2) / (2 * sigma**2))
 
         risk_map += influence
 
@@ -90,13 +89,13 @@ def generate_heatmap_grid(
             if cell.size == 0:
                 score = 0.0
             else:
-                infection_score = float(np.max(cell))
+                infection_score = float(np.percentile(cell, 90))
                 infection_score = max(0.0, min(infection_score, 1.0))
 
                 env = env_grid[i][j]
                 env_score = calculate_env_risk(env)
 
-                score = max(infection_score, env_score * 0.3)
+                score = max(infection_score, env_score * 0.35)
 
             score = max(0.0, min(score, 1.0))
 
@@ -211,7 +210,7 @@ def generate_explanation(factors, risk_level, near_infection=False):
     return {"reasons": list(set(reasons)), "actions": list(set(actions))}
 
 
-def is_near_infection(x, y, infected_points, threshold=100):
+def is_near_infection(x, y, infected_points, threshold=145):
     for pt in infected_points:
         dx = x - pt["x"]
         dy = y - pt["y"]
@@ -220,7 +219,7 @@ def is_near_infection(x, y, infected_points, threshold=100):
     return False
 
 
-def count_infected_in_cell(x_center, y_center, infected_points, threshold=80):
+def count_infected_in_cell(x_center, y_center, infected_points, threshold=120):
     count = 0
     for pt in infected_points:
         dx = x_center - pt["x"]
