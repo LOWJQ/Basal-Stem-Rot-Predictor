@@ -112,7 +112,7 @@ def generate_heatmap_grid(
             env = env_grid[i][j]
 
             detected_infected_trees = count_infected_in_cell(
-                x_center, y_center, infected_points
+                x1, y1, x2, y2, infected_points
             )
 
             factors = {
@@ -219,14 +219,10 @@ def is_near_infection(x, y, infected_points, threshold=145):
     return False
 
 
-def count_infected_in_cell(x_center, y_center, infected_points, threshold=120):
+def count_infected_in_cell(x1, y1, x2, y2, infected_points):
     count = 0
     for pt in infected_points:
-        dx = x_center - pt["x"]
-        dy = y_center - pt["y"]
-        dist = (dx**2 + dy**2) ** 0.5
-
-        if dist < threshold:
+        if x1 <= pt["x"] < x2 and y1 <= pt["y"] < y2:
             count += 1
 
     return count

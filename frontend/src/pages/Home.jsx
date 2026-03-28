@@ -12,12 +12,14 @@ import {
   deleteAllHistoryScans,
   deleteHistoryScan,
   fetchHistory,
+  fetchHistoryReport,
   fetchHistoryScan,
   predictScan,
   renameHistoryScan,
 } from '../services/api'
 import SimpleResultsView from '../services/SimpleResultsView'
 import HistorySummaryView from '../services/HistorySummaryView'
+import ReportPreviewView from '../services/ReportPreviewView'
 
 function formatHistoryTitle(scan) {
   if (scan.title && scan.title.trim()) {
@@ -56,6 +58,7 @@ export default function Home() {
   const [isDeletingAllHistory, setIsDeletingAllHistory] = useState(false)
   const [openMenuId, setOpenMenuId] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [resultViewMode, setResultViewMode] = useState('analysis')
 
   const activeHistoryId = result?.history_id ?? historySummary?.id ?? null
 
@@ -88,6 +91,7 @@ export default function Home() {
   const resetToNewAnalysis = () => {
     setResult(null)
     setHistorySummary(null)
+    setResultViewMode('analysis')
     setError('')
     setIsLoading(false)
     setIsOpeningHistory(false)
@@ -99,6 +103,7 @@ export default function Home() {
       setIsLoading(true)
       setError('')
       setHistorySummary(null)
+      setResultViewMode('analysis')
 
       const response = await predictScan(formData)
       setResult(response.data)
@@ -117,9 +122,19 @@ export default function Home() {
       setError('')
       setResult(null)
       setHistorySummary(null)
+      setResultViewMode('analysis')
 
       const response = await fetchHistoryScan(scanId)
-      const scan = response.scan
+      const scan = { ...response.scan }
+
+      if (scan.payload && !scan.payload.report) {
+        try {
+          const reportResponse = await fetchHistoryReport(scanId)
+          scan.payload = { ...scan.payload, report: reportResponse.report }
+        } catch (reportError) {
+          // Older scans may not have report data yet, so leave payload as-is.
+        }
+      }
 
       if (scan.payload) {
         setResult(scan.payload)
@@ -377,7 +392,30 @@ export default function Home() {
                 <p>Opening saved analysis...</p>
               </div>
             ) : result ? (
-              <SimpleResultsView result={result} />
+              <>
+                {result.report ? (
+                  <div className="result-view-toggle">
+                    <button
+                      type="button"
+                      className={`result-view-toggle-button ${resultViewMode === 'analysis' ? 'active' : ''}`}
+                      onClick={() => setResultViewMode('analysis')}
+                    >
+                      Analysis View
+                    </button>
+                    <button
+                      type="button"
+                      className={`result-view-toggle-button ${resultViewMode === 'report' ? 'active' : ''}`}
+                      onClick={() => setResultViewMode('report')}
+                    >
+                      Report Preview
+                    </button>
+                  </div>
+                ) : null}
+
+                {resultViewMode === 'report' && result.report
+                  ? <ReportPreviewView report={result.report} historyId={result.history_id} />
+                  : <SimpleResultsView result={result} />}
+              </>
             ) : historySummary ? (
               <HistorySummaryView scan={historySummary} />
             ) : (

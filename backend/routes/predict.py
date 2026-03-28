@@ -19,6 +19,7 @@ from services.visualization import draw_heatmap
 from services.environmental_data import get_env_cached
 from services.simulate_future_heatmap import simulate_future_steps
 from services.database import save_scan
+from services.report_builder import build_report
 
 
 logger = logging.getLogger(__name__)
@@ -187,6 +188,22 @@ def predict():
         }
 
         default_title = f"Scan {datetime.now().strftime('%b %d, %I:%M %p')}"
+
+        response_data["report"] = build_report(
+            report_id=job_id,
+            title=default_title,
+            lat=lat,
+            lon=lon,
+            altitude=altitude,
+            infected_points=infected_points,
+            flat_heatmap=flat_heatmap,
+            environment_summary=environment_summary,
+            simulation_steps=future_steps,
+            output_image=output_url,
+            image_width=width,
+            image_height=height,
+            generated_at=datetime.utcnow().isoformat(),
+        )
 
         scan_id = save_scan(
             lat,

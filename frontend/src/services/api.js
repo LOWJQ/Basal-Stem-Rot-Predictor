@@ -29,6 +29,15 @@ export async function fetchHistoryScan(scanId) {
   return parseResponse(response, 'Failed to load history entry')
 }
 
+export async function fetchHistoryReport(scanId) {
+  const response = await fetch(`${API_BASE}/history/${scanId}/report`)
+  return parseResponse(response, 'Failed to load report preview')
+}
+
+export function getHistoryReportPdfUrl(scanId) {
+  return `${API_BASE}/history/${scanId}/report/pdf`
+}
+
 export async function renameHistoryScan(scanId, title) {
   const response = await fetch(`${API_BASE}/history/${scanId}`, {
     method: 'PATCH',

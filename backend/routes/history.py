@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from services.database import (
     get_history,
     get_scan,
@@ -6,6 +6,7 @@ from services.database import (
     delete_scan,
     delete_all_scans,
 )
+from services.pdf_export import build_report_pdf
 
 history_bp = Blueprint("history", __name__)
 
@@ -21,6 +22,43 @@ def history_detail(scan_id):
     if scan is None:
         return jsonify({"error": "History entry not found"}), 404
     return jsonify({"scan": scan})
+
+
+@history_bp.route("/history/<int:scan_id>/report", methods=["GET"])
+def history_report(scan_id):
+    scan = get_scan(scan_id)
+    if scan is None:
+        return jsonify({"error": "History entry not found"}), 404
+
+    payload = scan.get("payload") or {}
+    report = payload.get("report")
+
+    if report is None:
+        return jsonify({"error": "Report data not available for this scan"}), 404
+
+    return jsonify({"report": report})
+
+
+@history_bp.route("/history/<int:scan_id>/report/pdf", methods=["GET"])
+def history_report_pdf(scan_id):
+    scan = get_scan(scan_id)
+    if scan is None:
+        return jsonify({"error": "History entry not found"}), 404
+
+    payload = scan.get("payload") or {}
+    report = payload.get("report")
+
+    if report is None:
+        return jsonify({"error": "Report data not available for this scan"}), 404
+
+    pdf_buffer = build_report_pdf(report)
+    filename = f"bsr-report-{scan_id}.pdf"
+    return send_file(
+        pdf_buffer,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=filename,
+    )
 
 
 @history_bp.route("/history/<int:scan_id>", methods=["PATCH"])
