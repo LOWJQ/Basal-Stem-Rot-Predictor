@@ -10,3 +10,4 @@ backend/test*.jpg
 *.pt
 
 node_modules/
+frontend/build/
