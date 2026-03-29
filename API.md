@@ -158,7 +158,7 @@ Access: `heatmap_grid[row][col]` — same fields as `heatmap` above.
 
 ---
 
-### `simulation_frames` — array of 12 image URLs
+### `simulation_frames` — array of 13 image URLs
 
 Pre-rendered heatmap overlay images for the spread simulation timeline.
 
@@ -168,13 +168,13 @@ Pre-rendered heatmap overlay images for the spread simulation timeline.
   "http://127.0.0.1:5000/outputs/frames/frame_1_abc.jpg",  // index 1 = Week 1
   "http://127.0.0.1:5000/outputs/frames/frame_2_abc.jpg",  // index 2 = Week 2
   ...
-  "http://127.0.0.1:5000/outputs/frames/frame_11_abc.jpg"  // index 11 = Week 11
+  "http://127.0.0.1:5000/outputs/frames/frame_12_abc.jpg"  // index 12 = Week 12
 ]
 ```
 
 **For the simulation slider:**
 ```javascript
-// week = 0 means "Now", week = 1-11 means Week N
+// week = 0 means "Now", week = 1-12 means Week N
 const imageUrl = week === 0
   ? data.output_image                        // original annotated image
   : data.simulation_frames[week - 1]        // simulation frame
