@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY ./Basal-Stem-Rot-Predictor-main/backend /app
+COPY ./backend /app
 
 RUN pip install --no-cache-dir -r requirements.txt
 
