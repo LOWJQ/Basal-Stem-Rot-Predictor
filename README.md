@@ -27,12 +27,12 @@ There is a clear need for an early-warning and predictive system to identify hig
 
 This project provides a full-stack AI system that converts plantation images into actionable insights:
 
-1. Upload aerial or drone image  
+1. User upload drone image, GPS location and altitude of the drone  
 2. Detect infected trees using computer vision  
-3. Integrate environmental data  
-4. Generate spatial risk heatmaps  
-5. Simulate future disease spread  
-6. Save, visualize, and export reports  
+3. Integrate live environmental data (temperature, humidity, soil moisture)
+4. Generate a spatial risk heatmap across the plantation grid 
+5. Simulate future disease spread up to 12 weeks ahead 
+6. Save, visualize, and export reports as PDF or Excel
 
 ---
 
@@ -94,11 +94,11 @@ https://drive.google.com/uc?export=download&id=1wbQr-HsI6B2-WJ47qt-7DNo4G2G0ti6c
 
 #### (Optional) Train the model yourself
 
-If you'd like to retrain the detection model on your own, the dataset used in this project is publicly available on Roboflow:
+If you'd like to train the detection model on your own, the dataset used in this project is publicly available online:
 
-**Dataset:** UAV Palm Data — BSR labelled aerial imagery  
-**Link:** https://universe.roboflow.com/class-wx3l7/uav-palm-data  
-**Size:** ~1,000 labelled images of oil palm with Basal Stem Rot
+**Dataset:** Ganoderma Detection Dataset for Oil Palm Crop Disease Classification
+**Link:** https://data.mendeley.com/datasets/s23jvbpnr3/1 
+**Size:** 1,000 labelled images of oil palm with Basal Stem Rot
 
 ### 4. Create `.env` file
 Inside the `backend` folder, create a file named `.env`:
