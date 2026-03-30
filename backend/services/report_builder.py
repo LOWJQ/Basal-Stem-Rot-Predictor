@@ -1,5 +1,8 @@
 from datetime import datetime
 
+DEFAULT_CPO_TONNES_PER_INFECTED_TREE = 0.75
+DEFAULT_YIELD_LOSS_FACTOR = 0.8
+
 
 def _risk_range_label(score):
     if score >= 0.68:
@@ -207,6 +210,23 @@ def _build_simulation_summary(simulation_steps):
     }
 
 
+def _estimated_yield_at_risk(infected_points):
+    infected_count = len(infected_points)
+    estimated_tonnes = (
+        infected_count
+        * DEFAULT_CPO_TONNES_PER_INFECTED_TREE
+        * DEFAULT_YIELD_LOSS_FACTOR
+    )
+
+    return {
+        "estimated_tonnes": round(estimated_tonnes, 2),
+        "assumptions": {
+            "cpo_tonnes_per_infected_tree": DEFAULT_CPO_TONNES_PER_INFECTED_TREE,
+            "loss_factor": DEFAULT_YIELD_LOSS_FACTOR,
+        },
+    }
+
+
 def build_report(
     *,
     report_id,
@@ -227,6 +247,7 @@ def build_report(
 
     risk_scores = [float(cell["risk_score"]) for cell in flat_heatmap]
     avg_risk_score = round(sum(risk_scores) / len(risk_scores), 4) if risk_scores else 0.0
+    yield_at_risk = _estimated_yield_at_risk(infected_points)
 
     return {
         "report_id": report_id,
@@ -249,6 +270,8 @@ def build_report(
             "average_soil_moisture": environment_summary.get("avg_soil_moisture"),
             "average_detection_confidence": _average_detection_confidence(infected_points),
             "detection_confidence_range": _confidence_range(infected_points),
+            "estimated_yield_at_risk_tonnes": yield_at_risk["estimated_tonnes"],
+            "yield_risk_assumptions": yield_at_risk["assumptions"],
             "detected_areas": _detected_areas(
                 infected_points,
                 image_width,

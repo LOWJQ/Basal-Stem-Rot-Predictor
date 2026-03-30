@@ -32,6 +32,7 @@ export default function ReportPreviewView({ report, historyId }) {
   const location = report.location || {}
   const simulation = report.simulation || {}
   const confidenceRange = summary.detection_confidence_range
+  const yieldRiskAssumptions = summary.yield_risk_assumptions
   const recommendationAreas = report.recommendation_areas || []
   const contextualRecommendations = recommendationAreas.map((entry) => entry.action)
   const infectedAreaLabels = summary.detected_areas || []
@@ -79,6 +80,13 @@ export default function ReportPreviewView({ report, historyId }) {
               {infectedAreaLabels.length ? infectedAreaLabels.join(', ') : 'No specific infected area identified'}
             </li>
             <li><strong>High-risk areas:</strong> {summary.high_risk_cells ?? 'N/A'}</li>
+            <li><strong>Estimated yield at risk:</strong> {summary.estimated_yield_at_risk_tonnes ?? 'N/A'} tons</li>
+            {yieldRiskAssumptions ? (
+              <li>
+                <strong>Yield estimate basis:</strong>{' '}
+                {yieldRiskAssumptions.cpo_tonnes_per_infected_tree} tons/tree at {(yieldRiskAssumptions.loss_factor * 100).toFixed(0)}% loss
+              </li>
+            ) : null}
           </ul>
         </section>
 

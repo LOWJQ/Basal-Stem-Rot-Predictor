@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 function formatRiskHeading(risk) {
   if (!risk) return ['RISK AREA', 'SELECTED']
@@ -313,13 +313,55 @@ function getDetectionConfidenceRange(points) {
   return `${(minConfidence * 100).toFixed(1)}% - ${(maxConfidence * 100).toFixed(1)}%`
 }
 
+function getYieldAtRiskSignal(estimatedTonnes) {
+  const numericValue = Number(estimatedTonnes)
+
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return { tone: 'low', status: 'Limited', helper: 'No immediate yield exposure estimated' }
+  }
+
+  if (numericValue >= 1) {
+    return { tone: 'high', status: 'Elevated', helper: 'Estimated output exposure is significant' }
+  }
+
+  if (numericValue >= 0.25) {
+    return { tone: 'medium', status: 'Watch', helper: 'Potential output loss should be monitored' }
+  }
+
+  return { tone: 'low', status: 'Early', helper: 'Estimated exposure is currently limited' }
+}
+
+function buildExecutiveSummary(result) {
+  const infectedCount = Array.isArray(result?.infected_points) ? result.infected_points.length : 0
+  const highRiskCount = Array.isArray(result?.heatmap)
+    ? result.heatmap.filter((cell) => cell.risk === 'high').length
+    : 0
+
+  if (infectedCount > 0 && highRiskCount > 0) {
+    return `${infectedCount} infected tree${infectedCount === 1 ? '' : 's'} detected. Immediate action is recommended in ${highRiskCount} high-risk zone${highRiskCount === 1 ? '' : 's'}.`
+  }
+
+  if (infectedCount > 0) {
+    return `${infectedCount} infected tree${infectedCount === 1 ? '' : 's'} detected. Targeted field inspection is recommended.`
+  }
+
+  if (highRiskCount > 0) {
+    return `No infected trees were directly detected, but ${highRiskCount} high-risk zone${highRiskCount === 1 ? '' : 's'} still require close monitoring.`
+  }
+
+  return 'No infected trees were directly detected. Continue routine monitoring across the scanned area.'
+}
+
 export default function SimpleResultsView({ result }) {
+  const visualColumnRef = useRef(null)
   const [selectedCell, setSelectedCell] = useState(() => {
     if (!result?.heatmap?.length) return null
     return [...result.heatmap].sort((a, b) => b.risk_score - a.risk_score)[0]
   })
   const [selectedWeek, setSelectedWeek] = useState(0)
   const [detailView, setDetailView] = useState('overview')
+  const [detailPanelHeight, setDetailPanelHeight] = useState(null)
+  const [isSimulationHelpOpen, setIsSimulationHelpOpen] = useState(false)
 
   const simulationImage = result.simulation_frames[selectedWeek]
   const visibleNarrative = buildRiskNarrative(selectedCell, result.infected_points, result.image_size)
@@ -332,19 +374,49 @@ export default function SimpleResultsView({ result }) {
   const soilSignal = getMetricSignal('soil', result.environment_summary.avg_soil_moisture)
   const detectionConfidenceSummary = getDetectionConfidenceSummary(result.infected_points)
   const detectionConfidenceRange = getDetectionConfidenceRange(result.infected_points)
+  const executiveSummary = buildExecutiveSummary(result)
+  const estimatedYieldAtRisk = result.report?.summary?.estimated_yield_at_risk_tonnes
+  const yieldRiskAssumptions = result.report?.summary?.yield_risk_assumptions
+  const yieldRiskSignal = getYieldAtRiskSignal(estimatedYieldAtRisk)
 
   const handleSelectCell = (cell) => {
     setSelectedCell(cell)
     setDetailView('overview')
   }
 
+  useEffect(() => {
+    const node = visualColumnRef.current
+    if (!node) return undefined
+
+    const updateHeight = () => {
+      setDetailPanelHeight(node.getBoundingClientRect().height)
+    }
+
+    updateHeight()
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateHeight)
+      return () => window.removeEventListener('resize', updateHeight)
+    }
+
+    const observer = new ResizeObserver(() => updateHeight())
+    observer.observe(node)
+    window.addEventListener('resize', updateHeight)
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', updateHeight)
+    }
+  }, [detailView, selectedCell, result])
+
   return (
     <div className="results-page">
       <div className="results-header">
-        <h1 className="results-title">Analysis Result</h1>
+        <h1 className="results-title">Field Risk Overview</h1>
         <p className="results-subtitle">
           Review the detected infections and inspect any area on the heatmap.
         </p>
+        <p className="results-executive-summary">{executiveSummary}</p>
       </div>
 
       <div className="results-summary-stack">
@@ -356,6 +428,21 @@ export default function SimpleResultsView({ result }) {
             </div>
             <span className="results-stat-value">{result.infected_points.length}</span>
             <span className="results-stat-helper">{infectedSignal.helper}</span>
+          </div>
+
+          <div className={`results-stat tone-${yieldRiskSignal.tone}`}>
+            <div className="results-stat-topline">
+              <span className="results-stat-label">Estimated yield at risk</span>
+              <span className={`results-stat-badge tone-${yieldRiskSignal.tone}`}>{yieldRiskSignal.status}</span>
+            </div>
+            <span className="results-stat-value">
+              {Number.isFinite(Number(estimatedYieldAtRisk)) ? `${Number(estimatedYieldAtRisk).toFixed(2)} tons` : 'N/A'}
+            </span>
+            <span className="results-stat-helper">
+              {yieldRiskAssumptions
+                ? `Estimate uses ${yieldRiskAssumptions.cpo_tonnes_per_infected_tree} tons/tree and an ${(yieldRiskAssumptions.loss_factor * 100).toFixed(0)}% loss factor.`
+                : yieldRiskSignal.helper}
+            </span>
           </div>
 
           <div className="results-stat tone-neutral">
@@ -400,10 +487,31 @@ export default function SimpleResultsView({ result }) {
         </div>
       </div>
 
-      <h2 className="results-section-title">Generated heatmap</h2>
+      <h2 className="results-section-title">Infection Risk Map</h2>
 
       <div className="results-main-grid">
-        <div className="results-visual-column">
+        <div className="results-visual-column" ref={visualColumnRef}>
+          <div className="results-legend" aria-label="Heatmap legend">
+            <div className="results-legend-items">
+              <span className="results-legend-item">
+                <span className="results-legend-swatch risk-high" />
+                High risk
+              </span>
+              <span className="results-legend-item">
+                <span className="results-legend-swatch risk-medium" />
+                Medium risk
+              </span>
+              <span className="results-legend-item">
+                <span className="results-legend-swatch risk-low" />
+                Low risk
+              </span>
+            </div>
+
+            <span className="results-legend-selection">
+              Black outline = selected grid cell
+            </span>
+          </div>
+
           <div className="results-image-block interactive">
             <img
               src={result.output_image}
@@ -432,7 +540,10 @@ export default function SimpleResultsView({ result }) {
           </div>
         </div>
 
-        <div className="results-detail-panel">
+        <div
+          className="results-detail-panel"
+          style={detailPanelHeight ? { height: `${detailPanelHeight}px` } : undefined}
+        >
           {selectedCell && (
             <div className="results-detail-content">
               {detailView === 'overview' ? (
@@ -515,9 +626,28 @@ export default function SimpleResultsView({ result }) {
 
       <div className="results-simulation-section">
         <div className="results-simulation-header">
-          <h2 className="results-section-title">Estimated Risk Expansion (If No Action Taken)</h2>
+          <div className="results-simulation-title-group">
+            <h2 className="results-section-title">Estimated Risk Expansion (If No Action Taken)</h2>
+            <div className="results-simulation-help-wrap">
+              <button
+                type="button"
+                className="results-simulation-help-button"
+                aria-label="Explain simulation timeline"
+                aria-expanded={isSimulationHelpOpen}
+                onClick={() => setIsSimulationHelpOpen((current) => !current)}
+              >
+                ?
+              </button>
+
+              {isSimulationHelpOpen ? (
+                <div className="results-simulation-help-popover" role="note">
+                  Move the timeline to see projected spread over 12 weeks if no intervention is taken.
+                </div>
+              ) : null}
+            </div>
+          </div>
           <span className="results-week-label">
-            {selectedWeek === 0 ? 'Now' : `Week ${selectedWeek}`}
+            {selectedWeek === 0 ? 'Current state' : `Week ${selectedWeek}`}
           </span>
         </div>
 
@@ -540,7 +670,7 @@ export default function SimpleResultsView({ result }) {
           />
 
           <div className="results-slider-labels">
-            <span>Now</span>
+            <span>Current state</span>
             <span>Week 12</span>
           </div>
         </div>
