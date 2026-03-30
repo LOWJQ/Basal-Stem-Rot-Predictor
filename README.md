@@ -6,7 +6,10 @@ An AI-powered decision support system for early detection, risk assessment, and 
 
 Palm oil accounts for over **30%** of global edible oil supply and is found in nearly **50%** of packaged products, with about **68%** used in food applications such as cooking oil, margarine, and instant noodles.
 
-However, Basal Stem Rot (BSR), caused by *Ganoderma boninense*, is the most destructive disease affecting oil palm plantations and can reduce yields by up to **80%**. This poses a significant threat to:
+However, Basal Stem Rot (BSR), caused by *Ganoderma boninense*, is the most destructive disease affecting oil palm plantations and can reduce yields by up to **80%**. 
+
+In Malaysia alone, BSR has already affected over **200,000** hectares of plantations, causing losses of up to **RM1.5 billion** annually. This poses a significant threat to:
+
 - Food security for millions who depend on palm oil as an affordable cooking staple.
 - Food product prices  
 - Farmer livelihoods 
