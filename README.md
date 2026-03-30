@@ -96,9 +96,9 @@ https://drive.google.com/uc?export=download&id=1wbQr-HsI6B2-WJ47qt-7DNo4G2G0ti6c
 
 If you'd like to train the detection model on your own, the dataset used in this project is publicly available online:
 
-**Dataset:** Ganoderma Detection Dataset for Oil Palm Crop Disease Classification
-**Link:** https://data.mendeley.com/datasets/s23jvbpnr3/1 
-**Size:** 1,000 labelled images of oil palm with Basal Stem Rot
+**Dataset:** Ganoderma Detection Dataset for Oil Palm Crop Disease Classification  
+**Link:** https://data.mendeley.com/datasets/s23jvbpnr3/1  
+**Size:** ~1,000 labelled images of oil palm with Basal Stem Rot
 
 ### 4. Create `.env` file
 Inside the `backend` folder, create a file named `.env`:
