@@ -6,8 +6,6 @@ __pycache__/
 .env
 backend/data/history.db
 backend/output/
-backend/test*.jpg
-*.pt
 
 node_modules/
 frontend/build/

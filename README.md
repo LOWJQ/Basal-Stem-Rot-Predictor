@@ -84,17 +84,6 @@ cd Basal-Stem-Rot-Predictor
 pip install -r requirements.txt
 ```
 
-### 3. Download model file
-Download the detection model (`model1.pt`) and place it in:
-```
-backend/model/model1.pt
-```
-
-Here's the downloadable link:
-```
-https://drive.google.com/uc?export=download&id=1wbQr-HsI6B2-WJ47qt-7DNo4G2G0ti6c
-```
-
 #### (Optional) Train the model yourself
 
 If you'd like to train the detection model on your own, the dataset used in this project is publicly available online:
@@ -103,7 +92,7 @@ If you'd like to train the detection model on your own, the dataset used in this
 **Link:** https://data.mendeley.com/datasets/s23jvbpnr3/1  
 **Size:** ~1,000 labelled images of oil palm with Basal Stem Rot
 
-### 4. Create `.env` file
+### 3. Create `.env` file
 Inside the `backend` folder, create a file named `.env`:
 ```
 backend/.env
@@ -115,13 +104,13 @@ OPENWEATHER_API_KEY=your_api_key  # Get free key at openweathermap.org/api
 AGRO_API_KEY=your_api_key         # Get free key at agromonitoring.com
 ```
 
-### 5. Run the backend
+### 4. Run the backend
 ```bash
 cd backend
 python main.py
 ```
 
-### 6. Run the frontend
+### 5. Run the frontend
 ```bash
 cd frontend
 npm install
