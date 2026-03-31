@@ -160,20 +160,17 @@ def predict():
         avg_humidity = np.mean([v["humidity"] for v in samples.values()])
         avg_temp = np.mean([v["temperature"] for v in samples.values()])
 
-        base_url = request.host_url.rstrip("/")
         frame_urls = []
         for p in frame_paths:
             img_frame = cv2.imread(p)
-            h, w = img_frame.shape[:2]
-            if w > 400:
-                scale = 400 / w
-                img_frame = cv2.resize(img_frame, (400, int(h * scale)))
-            _, buffer = cv2.imencode('.jpg', img_frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
+            _, buffer = cv2.imencode('.webp', img_frame, [cv2.IMWRITE_WEBP_QUALITY, 75])
             encoded = base64.b64encode(buffer).decode("utf-8")
-            frame_urls.append(f"data:image/jpeg;base64,{encoded}")
+            frame_urls.append(f"data:image/webp;base64,{encoded}")
         with open(output_path, "rb") as f:
-            encoded_output = base64.b64encode(f.read()).decode("utf-8")
-        output_url = f"data:image/jpeg;base64,{encoded_output}"
+            img_output = cv2.imread(output_path)
+        _, out_buffer = cv2.imencode('.webp', img_output, [cv2.IMWRITE_WEBP_QUALITY, 85])
+        encoded_output = base64.b64encode(out_buffer).decode("utf-8")
+        output_url = f"data:image/webp;base64,{encoded_output}"
         job_id = uuid.uuid4().hex
 
         environment_summary = {
