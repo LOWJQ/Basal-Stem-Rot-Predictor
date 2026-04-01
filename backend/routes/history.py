@@ -8,6 +8,7 @@ from services.database import (
 )
 from services.pdf_export import build_report_pdf
 from services.excel_export import build_report_excel
+from services.simulation_frames import ensure_simulation_frames
 
 history_bp = Blueprint("history", __name__)
 
@@ -53,6 +54,18 @@ def history_simulation_frames(scan_id):
         "simulation_expected_frames",
         len(simulation_frames),
     )
+
+    if simulation_status != "complete" or len(simulation_frames) < simulation_expected_frames:
+        ensure_simulation_frames(scan_id, request.host_url.rstrip("/"))
+        refreshed_scan = get_scan(scan_id)
+        if refreshed_scan is not None:
+            payload = refreshed_scan.get("payload") or {}
+            simulation_frames = payload.get("simulation_frames") or simulation_frames
+            simulation_status = payload.get("simulation_frames_status", simulation_status)
+            simulation_expected_frames = payload.get(
+                "simulation_expected_frames",
+                simulation_expected_frames,
+            )
 
     return jsonify(
         {
