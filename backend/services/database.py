@@ -5,6 +5,16 @@ from datetime import datetime
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "history.db")
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+DB_TIMEOUT_SECONDS = 30
+
+
+def _connect(row_factory=None):
+    conn = sqlite3.connect(DB_PATH, timeout=DB_TIMEOUT_SECONDS)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout = 30000")
+    if row_factory is not None:
+        conn.row_factory = row_factory
+    return conn
 
 
 def _ensure_column(conn, table_name, column_name, column_definition):
@@ -19,7 +29,7 @@ def _ensure_column(conn, table_name, column_name, column_definition):
 
 
 def init_db():
-    with sqlite3.connect(DB_PATH) as conn:
+    with _connect() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS scans (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,7 +60,7 @@ def save_scan(lat, lon, altitude, infected_points, heatmap, env_summary, payload
     if not title:
         title = f"Scan {datetime.now().strftime('%b %d, %I:%M %p')}"
 
-    with sqlite3.connect(DB_PATH) as conn:
+    with _connect() as conn:
         cursor = conn.execute("""
             INSERT INTO scans
             (timestamp, title, lat, lon, altitude, infected_count, avg_risk_score,
@@ -82,8 +92,7 @@ def _deserialize_scan(row, include_payload=False):
 
 
 def get_history(limit=20):
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with _connect(sqlite3.Row) as conn:
         rows = conn.execute(
             "SELECT * FROM scans ORDER BY timestamp DESC LIMIT ?", (limit,)
         ).fetchall()
@@ -91,8 +100,7 @@ def get_history(limit=20):
 
 
 def get_scan(scan_id):
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with _connect(sqlite3.Row) as conn:
         row = conn.execute(
             "SELECT * FROM scans WHERE id = ?",
             (scan_id,),
@@ -103,7 +111,7 @@ def get_scan(scan_id):
 
 
 def update_scan_payload(scan_id, payload):
-    with sqlite3.connect(DB_PATH) as conn:
+    with _connect() as conn:
         cursor = conn.execute(
             "UPDATE scans SET payload = ? WHERE id = ?",
             (json.dumps(payload) if payload is not None else None, scan_id),
@@ -112,7 +120,7 @@ def update_scan_payload(scan_id, payload):
 
 
 def update_scan_title(scan_id, title):
-    with sqlite3.connect(DB_PATH) as conn:
+    with _connect() as conn:
         cursor = conn.execute(
             "UPDATE scans SET title = ? WHERE id = ?",
             (title, scan_id),
@@ -121,7 +129,7 @@ def update_scan_title(scan_id, title):
 
 
 def delete_scan(scan_id):
-    with sqlite3.connect(DB_PATH) as conn:
+    with _connect() as conn:
         cursor = conn.execute(
             "DELETE FROM scans WHERE id = ?",
             (scan_id,),
@@ -129,5 +137,5 @@ def delete_scan(scan_id):
         return cursor.rowcount > 0
 
 def delete_all_scans():
-    with sqlite3.connect(DB_PATH) as conn:
+    with _connect() as conn:
         conn.execute("DELETE FROM scans")
