@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   LoaderCircle,
+  Menu,
   MessageSquare,
   MoreHorizontal,
   Settings,
@@ -147,6 +148,7 @@ export default function Home() {
   const [openMenuId, setOpenMenuId] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState(false)
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [reviewItems, setReviewItems] = useState(null)
   const [batchResults, setBatchResults] = useState(null)
   const [selectedBatchHistoryId, setSelectedBatchHistoryId] = useState(null)
@@ -177,6 +179,17 @@ export default function Home() {
     const handleWindowClick = () => setOpenMenuId(null)
     window.addEventListener('click', handleWindowClick)
     return () => window.removeEventListener('click', handleWindowClick)
+  }, [])
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 900) {
+        setIsMobileSidebarOpen(false)
+      }
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   const loadBatchHistory = async (groupId = null, preferredHistoryId = null) => {
@@ -256,6 +269,7 @@ export default function Home() {
     setBatchProgress(null)
     setBatchItemProgress({})
     setOpenMenuId(null)
+    setIsMobileSidebarOpen(false)
   }
 
   const runScan = async (formData) => {
@@ -371,6 +385,7 @@ export default function Home() {
       setBatchProgress(null)
 
       await loadBatchHistory(groupId, preferredHistoryId)
+      setIsMobileSidebarOpen(false)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -499,7 +514,7 @@ export default function Home() {
 
   return (
     <div className="app-layout">
-      <aside className="sidebar">
+      <aside className={`sidebar ${isMobileSidebarOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-top">
           <button className="sidebar-new" onClick={resetToNewAnalysis}>
             <span>New analysis</span>
@@ -575,8 +590,25 @@ export default function Home() {
         </div>
       </aside>
 
+      {isMobileSidebarOpen ? (
+        <button
+          type="button"
+          className="sidebar-mobile-backdrop"
+          aria-label="Close sidebar"
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+      ) : null}
+
       <div className="main-panel">
         <header className="topbar">
+          <button
+            type="button"
+            className="mobile-sidebar-toggle"
+            onClick={() => setIsMobileSidebarOpen(true)}
+            aria-label="Open sidebar"
+          >
+            <Menu size={18} />
+          </button>
           <div className="brand">Basal Stem Rot Predictor</div>
         </header>
 

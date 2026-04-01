@@ -453,6 +453,9 @@ export default function SimpleResultsView({ result }) {
     ) {
       return undefined
     }
+    if (simulationFrameStatus === 'error') {
+      return undefined
+    }
 
     let isCancelled = false
     let timeoutId
@@ -472,6 +475,10 @@ export default function SimpleResultsView({ result }) {
         setResolvedSimulationFrames(nextFrames)
         setSimulationFrameStatus(nextStatus)
         setExpectedSimulationFrames(nextExpectedFrames)
+
+        if (nextStatus === 'error') {
+          return
+        }
 
         if (nextStatus !== 'complete' || nextFrames.length < nextExpectedFrames) {
           timeoutId = window.setTimeout(pollSimulationFrames, 2000)
@@ -749,7 +756,9 @@ export default function SimpleResultsView({ result }) {
 
         {simulationFrameStatus !== 'complete' ? (
           <p className="results-simulation-status">
-            Preparing future simulation frames...
+            {simulationFrameStatus === 'error'
+              ? 'Future simulation frames could not be prepared right now.'
+              : 'Preparing future simulation frames...'}
           </p>
         ) : null}
 

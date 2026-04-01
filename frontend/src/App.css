@@ -421,9 +421,27 @@ input {
   padding: 0 24px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(10px);
+}
+
+.mobile-sidebar-toggle {
+  display: none;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--text);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.mobile-sidebar-toggle:hover {
+  background: var(--panel-hover);
 }
 
 .brand {
@@ -1901,7 +1919,32 @@ input {
   }
 
   .sidebar {
-    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(300px, 82vw);
+    z-index: 1200;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16);
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-mobile-backdrop {
+    position: fixed;
+    inset: 0;
+    border: none;
+    background: rgba(15, 23, 42, 0.28);
+    z-index: 1100;
+    cursor: pointer;
+  }
+
+  .mobile-sidebar-toggle {
+    display: inline-flex;
   }
 
   .hero-title {
@@ -1916,17 +1959,34 @@ input {
 
 @media (max-width: 760px) {
   .batch-review-card {
-    grid-template-columns: 90px 1fr;
+    grid-template-columns: 1fr;
   }
 
   .batch-thumb,
   .batch-thumb-wrap {
-    width: 90px;
-    height: 70px;
+    width: 100%;
+    max-width: 220px;
+    height: auto;
+  }
+
+  .batch-thumb {
+    height: 140px;
   }
 
   .batch-fields {
-    grid-template-columns: 1fr 1fr auto;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .batch-card-progress {
+    top: 12px;
+    right: 12px;
+  }
+
+  .batch-remove-btn {
+    width: 100%;
+    justify-content: flex-start;
+    padding: 0 6px;
   }
 }
 
@@ -1970,22 +2030,23 @@ input {
   .results-map-wrap {
     height: 320px;
   }
+
+  .batch-review-header-left {
+    width: 100%;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .batch-back-btn {
+    align-self: flex-start;
+  }
+
+  .batch-review-subtitle {
+    line-height: 1.5;
+  }
 }
 
 @media (max-width: 520px) {
-  .batch-fields {
-    grid-template-columns: 1fr auto;
-  }
-
-  .batch-field:last-of-type {
-    grid-column: 1;
-  }
-
-  .batch-remove-btn {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
   .batch-review-header {
     flex-direction: column;
   }
@@ -2005,16 +2066,21 @@ input {
 
   .batch-review-actions {
     width: 100%;
+    flex-direction: column;
   }
 
   .batch-add-images-btn,
   .batch-analyze-all-btn {
-    flex: 1;
+    width: 100%;
     justify-content: center;
   }
 
   .batch-analyze-all-btn {
     width: 100%;
     justify-content: center;
+  }
+
+  .delete-modal-body h2 {
+    font-size: 24px;
   }
 }

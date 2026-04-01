@@ -175,7 +175,7 @@ def _build_recommendation_areas(flat_heatmap):
     return recommendation_areas
 
 
-def _build_simulation_summary(simulation_steps):
+def build_simulation_summary(simulation_steps):
     if not simulation_steps:
         return {
             "weeks_simulated": 0,
@@ -238,6 +238,7 @@ def build_report(
     flat_heatmap,
     environment_summary,
     simulation_steps,
+    simulation_summary=None,
     output_image,
     image_width,
     image_height,
@@ -286,7 +287,7 @@ def build_report(
         "recommendations": _build_recommendations(flat_heatmap),
         "recommendation_areas": _build_recommendation_areas(flat_heatmap),
         "top_risk_cells": _top_risk_cells(flat_heatmap),
-        "simulation": _build_simulation_summary(simulation_steps),
+        "simulation": simulation_summary if simulation_summary is not None else build_simulation_summary(simulation_steps),
         "assets": {
             "output_image": output_image,
         },

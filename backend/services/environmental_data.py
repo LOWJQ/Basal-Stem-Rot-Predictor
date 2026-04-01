@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 AGRO_API_KEY = os.getenv("AGRO_API_KEY")
-REQUEST_TIMEOUT_SECONDS = 5
+REQUEST_TIMEOUT_SECONDS = 2
 ENV_REQUEST_EXECUTOR = ThreadPoolExecutor(max_workers=8)
 
 
