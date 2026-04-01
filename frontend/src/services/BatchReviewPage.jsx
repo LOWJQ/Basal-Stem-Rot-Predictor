@@ -118,7 +118,7 @@ export default function BatchReviewPage({
         </div>
 
         <div className="batch-review-header-right">
-          {!canAnalyzeAll && (
+          {!canAnalyzeAll && !isLoading && (
             <p className="batch-analyze-all-warning">
               <AlertTriangle size={13} />
               At least one image needs complete location data

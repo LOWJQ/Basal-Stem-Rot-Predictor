@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import logging
 import os
@@ -7,7 +8,7 @@ import cv2
 import numpy as np
 from flask import Blueprint, jsonify, request
 
-from services.database import save_scan
+from services.database import get_scan, save_scan, update_scan_payload
 from services.env_interpolation import (
     apply_infection_env_variation,
     interpolate_env,
@@ -16,9 +17,9 @@ from services.env_interpolation import (
 from services.environmental_data import get_env_cached
 from services.geo_utils import generate_grid_coordinates
 from services.image_processing import detect_infected
-from services.report_builder import build_report
+from services.report_builder import build_report, build_simulation_summary
 from services.risk_analysis import generate_heatmap_grid, generate_risk_map
-from services.simulate_future_heatmap import grid_to_risk_map
+from services.simulate_future_heatmap import grid_to_risk_map, simulate_future_steps
 from services.visualization import draw_heatmap
 
 
@@ -28,14 +29,105 @@ predict_bp = Blueprint("predict", __name__)
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+FRAMES_DIR = os.path.join(OUTPUT_DIR, "frames")
 SOURCE_DIR = os.path.join(OUTPUT_DIR, "sources")
 
+SIMULATION_RENDER_EXECUTOR = ThreadPoolExecutor(max_workers=2)
+
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(FRAMES_DIR, exist_ok=True)
 os.makedirs(SOURCE_DIR, exist_ok=True)
 
 
 def build_output_url(base_url, relative_path):
     return f"{base_url}/outputs/{relative_path.replace(os.sep, '/')}"
+
+
+def _render_simulation_frames(scan_id, base_url):
+    """Background task: generate 12 weekly simulation frames and update the DB."""
+    try:
+        scan = get_scan(scan_id)
+    except Exception as exc:
+        logger.exception("Failed to fetch scan %s for simulation rendering: %s", scan_id, exc)
+        return
+
+    if scan is None:
+        logger.warning("Simulation render skipped — scan %s not found", scan_id)
+        return
+
+    payload = scan.get("payload") or {}
+    source_image_name = (payload.get("assets") or {}).get("source_image_name")
+    env_grid = payload.get("env_grid")
+    image_size = payload.get("image_size") or {}
+    output_image_url = payload.get("output_image")
+    initial_heatmap = payload.get("heatmap_grid")
+
+    if not initial_heatmap or not source_image_name or not env_grid:
+        logger.warning(
+            "Simulation render skipped for scan %s — missing heatmap_grid, source_image_name, or env_grid",
+            scan_id,
+        )
+        payload["simulation_frames_status"] = "error"
+        update_scan_payload(scan_id, payload)
+        return
+
+    source_image_path = os.path.join(SOURCE_DIR, source_image_name)
+    if not os.path.exists(source_image_path):
+        logger.warning(
+            "Simulation render failed for scan %s — source image missing at %s",
+            scan_id, source_image_path,
+        )
+        payload["simulation_frames_status"] = "error"
+        update_scan_payload(scan_id, payload)
+        return
+
+    width = int(image_size.get("width") or 0)
+    height = int(image_size.get("height") or 0)
+
+    if width <= 0 or height <= 0:
+        logger.warning("Simulation render failed for scan %s — invalid image dimensions", scan_id)
+        payload["simulation_frames_status"] = "error"
+        update_scan_payload(scan_id, payload)
+        return
+
+    try:
+        frame_urls = [output_image_url] if output_image_url else []
+
+        future_steps = simulate_future_steps(initial_heatmap, steps=12)
+
+        for idx, step_heatmap in enumerate(future_steps, start=1):
+            step_risk_map = grid_to_risk_map(step_heatmap, width, height)
+            frame_name = f"scan_{scan_id}_week_{idx}_{uuid.uuid4().hex}.jpg"
+            frame_path = os.path.join(FRAMES_DIR, frame_name)
+            draw_heatmap(
+                source_image_path,
+                step_risk_map,
+                [],
+                env_grid,
+                frame_path,
+                week=idx,
+            )
+            frame_urls.append(
+                build_output_url(base_url, os.path.join("frames", frame_name))
+            )
+
+        payload["simulation_frames"] = frame_urls
+        payload["simulation_frames_status"] = "complete"
+        if payload.get("report"):
+            payload["report"]["simulation"] = build_simulation_summary(
+                [initial_heatmap] + future_steps
+            )
+        update_scan_payload(scan_id, payload)
+        logger.info(
+            "Simulation frames complete for scan %s (%d frames)", scan_id, len(frame_urls)
+        )
+
+    except Exception as exc:
+        logger.exception(
+            "Background simulation rendering failed for scan %s: %s", scan_id, exc
+        )
+        payload["simulation_frames_status"] = "error"
+        update_scan_payload(scan_id, payload)
 
 
 @predict_bp.route("/predict", methods=["GET", "POST"])
@@ -133,6 +225,11 @@ def predict():
             grid_coords,
         )
 
+        heatmap_now = [
+            [{**cell, "factors": dict(cell["factors"])} for cell in row]
+            for row in heatmap_grid
+        ]
+
         output_name = f"output_{uuid.uuid4().hex}.jpg"
         output_path = os.path.join(OUTPUT_DIR, output_name)
         risk_map_now = grid_to_risk_map(heatmap_grid, width, height)
@@ -165,11 +262,13 @@ def predict():
 
         default_title = f"Scan {datetime.now().strftime('%b %d, %I:%M %p')}"
 
+        SIMULATION_EXPECTED_FRAMES = 13
+
         response_data = {
             "image_size": {"width": width, "height": height},
             "infected_points": infected_points,
             "heatmap": flat_heatmap,
-            "heatmap_grid": heatmap_grid,
+            "heatmap_grid": heatmap_now,
             "grid_coordinates": grid_coords,
             "environment_summary": {
                 "sampled_points": len(samples),
@@ -178,7 +277,8 @@ def predict():
             "output_image": output_url,
             "simulation_frames": [output_url],
             "simulation_frames_status": "pending",
-            "simulation_expected_frames": 13,
+            "simulation_expected_frames": SIMULATION_EXPECTED_FRAMES,
+            "env_grid": env_grid,
             "assets": {
                 "source_image_name": source_name,
                 "output_image_name": output_name,
@@ -228,6 +328,9 @@ def predict():
 
         response_data["history_id"] = scan_id
         response_data["title"] = default_title
+
+        # Fire-and-forget: renders 12 future weekly frames in the background
+        SIMULATION_RENDER_EXECUTOR.submit(_render_simulation_frames, scan_id, base_url)
 
         logger.info(
             "Predict success - lat=%s lon=%s infected=%s id=%s",
