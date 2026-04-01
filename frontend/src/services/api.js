@@ -3,7 +3,15 @@ const API_BASE = 'https://divine-surprise-production-58e6.up.railway.app'
 // const API_BASE = 'http://127.0.0.1:5000'
 
 async function parseResponse(response, fallbackMessage) {
-  const data = await response.json()
+  let data = {}
+
+  try {
+    data = await response.json()
+  } catch {
+    if (!response.ok) {
+      throw new Error(fallbackMessage)
+    }
+  }
 
   if (!response.ok) {
     throw new Error(data.error || fallbackMessage)
@@ -13,12 +21,20 @@ async function parseResponse(response, fallbackMessage) {
 }
 
 export async function predictScan(formData) {
-  const response = await fetch(`${API_BASE}/predict`, {
-    method: 'POST',
-    body: formData,
-  })
+  try {
+    const response = await fetch(`${API_BASE}/predict`, {
+      method: 'POST',
+      body: formData,
+    })
 
-  return parseResponse(response, 'Prediction failed')
+    return parseResponse(response, 'Prediction failed')
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error('Failed to reach the analysis server. Try fewer images or retry in a moment.')
+    }
+
+    throw error
+  }
 }
 
 export async function fetchHistory() {

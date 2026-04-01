@@ -15,6 +15,12 @@ from routes.health import health_bp
 from routes.history import history_bp
 from services.database import init_db
 
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://basal-stem-rot-predictor.onrender.com",
+]
+
 
 def create_app():
     app = Flask(__name__)
@@ -26,7 +32,20 @@ def create_app():
 
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 
-    CORS(app)
+    configured_origins = os.environ.get("CORS_ORIGINS", "")
+    allowed_origins = [
+        origin.strip()
+        for origin in configured_origins.split(",")
+        if origin.strip()
+    ] or DEFAULT_CORS_ORIGINS
+
+    CORS(
+        app,
+        resources={r"/*": {"origins": allowed_origins}},
+        supports_credentials=False,
+        methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization"],
+    )
 
     app.register_blueprint(predict_bp)
     app.register_blueprint(health_bp)

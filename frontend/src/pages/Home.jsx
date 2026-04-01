@@ -19,6 +19,7 @@ import {
 } from '../services/api'
 
 const HISTORY_BATCH_STORAGE_KEY = 'bsr-history-batches'
+const MAX_CONCURRENT_ANALYSES = 7
 
 function readStoredHistoryBatches() {
   try {
@@ -84,6 +85,38 @@ function buildHistoryGroups(historyItems) {
   }
 
   return groups
+}
+
+async function runWithConcurrencyLimit(items, limit, worker) {
+  const results = new Array(items.length)
+  let nextIndex = 0
+
+  async function runner() {
+    while (true) {
+      const currentIndex = nextIndex
+      nextIndex += 1
+
+      if (currentIndex >= items.length) {
+        return
+      }
+
+      try {
+        results[currentIndex] = {
+          status: 'fulfilled',
+          value: await worker(items[currentIndex], currentIndex),
+        }
+      } catch (error) {
+        results[currentIndex] = {
+          status: 'rejected',
+          reason: error,
+        }
+      }
+    }
+  }
+
+  const runnerCount = Math.min(limit, items.length)
+  await Promise.all(Array.from({ length: runnerCount }, () => runner()))
+  return results
 }
 
 export default function Home() {
@@ -235,43 +268,81 @@ export default function Home() {
         currentLabel: 'Starting all analyses...',
       })
 
-      let completedCount = 0
-      const results = await Promise.all(
-        batchItems.map(async (item) => {
-          try {
-            const batchResult = await runScan(item.formData)
-            completedCount += 1
-            setBatchItemProgress((current) => ({ ...current, [item.id]: 'done' }))
-            setBatchProgress({
-              current: completedCount,
-              total: batchItems.length,
-              status: 'running',
-              currentLabel: item.fileName
-                ? `Finished ${item.fileName}`
-                : `Finished item ${completedCount}`,
-            })
-            return batchResult
-          } catch (err) {
-            setBatchItemProgress((current) => ({ ...current, [item.id]: 'error' }))
-            throw err
-          }
-        })
+      let settledCount = 0
+      const settledResults = await runWithConcurrencyLimit(
+        batchItems,
+        MAX_CONCURRENT_ANALYSES,
+        async (item) => {
+          const batchResult = await runScan(item.formData)
+          settledCount += 1
+          setBatchItemProgress((current) => ({ ...current, [item.id]: 'done' }))
+          setBatchProgress({
+            current: settledCount,
+            total: batchItems.length,
+            status: 'running',
+            currentLabel: item.fileName
+              ? `Finished ${item.fileName}`
+              : `Finished item ${settledCount}`,
+          })
+          return batchResult
+        }
       )
 
-      setReviewItems(null)
-      setBatchResults(results)
-      setSelectedBatchHistoryId(results[0]?.history_id ?? null)
-      const nextBatch = createHistoryBatch(results.map((result) => result.history_id))
-      setSelectedHistoryGroupId(nextBatch.id)
-      await loadHistory()
+      const successfulResults = []
+      const failedResults = []
+
+      settledResults.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          successfulResults.push(result.value)
+          return
+        }
+
+        failedResults.push(result.reason)
+        settledCount += 1
+        setBatchItemProgress((current) => ({ ...current, [batchItems[index].id]: 'error' }))
+        setBatchProgress({
+          current: settledCount,
+          total: batchItems.length,
+          status: 'running',
+          currentLabel: batchItems[index].fileName
+            ? `Failed ${batchItems[index].fileName}`
+            : `Failed item ${settledCount}`,
+        })
+      })
+
+      if (successfulResults.length) {
+        const nextBatch = createHistoryBatch(successfulResults.map((result) => result.history_id))
+        setSelectedHistoryGroupId(nextBatch.id)
+        await loadHistory()
+      }
+
+      if (!failedResults.length) {
+        setReviewItems(null)
+        setBatchResults(successfulResults)
+        setSelectedBatchHistoryId(successfulResults[0]?.history_id ?? null)
+        setBatchProgress({
+          current: successfulResults.length,
+          total: batchItems.length,
+          status: 'done',
+          currentLabel: 'Batch analysis complete',
+        })
+        return
+      }
+
+      const firstError = failedResults[0]
+      const fallbackMessage = failedResults.length === batchItems.length
+        ? 'Analysis failed. Try again with fewer images or retry in a moment.'
+        : `${failedResults.length} image(s) failed. Successful analyses were saved to history.`
+
+      setError(firstError?.message || fallbackMessage)
       setBatchProgress({
-        current: results.length,
+        current: successfulResults.length,
         total: batchItems.length,
-        status: 'done',
-        currentLabel: 'Batch analysis complete',
+        status: 'error',
+        currentLabel: fallbackMessage,
       })
     } catch (err) {
-      setError(err.message)
+      setError(err.message || 'Analysis failed. Please try again.')
       setBatchProgress((current) => current ? { ...current, status: 'error' } : null)
     } finally {
       setIsLoading(false)

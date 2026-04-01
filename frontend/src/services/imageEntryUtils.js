@@ -1,5 +1,13 @@
 import exifr from 'exifr'
 
+function createEntryId(file, index) {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return `${file.name}-${crypto.randomUUID()}`
+  }
+
+  return `${file.name}-${file.lastModified}-${index}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 function readPreview(file) {
   return new Promise((resolve) => {
     const reader = new FileReader()
@@ -42,7 +50,7 @@ export async function buildImageEntries(fileList) {
       }
 
       return {
-        id: `${file.name}-${file.lastModified}-${index}`,
+        id: createEntryId(file, index),
         file,
         preview,
         lat,

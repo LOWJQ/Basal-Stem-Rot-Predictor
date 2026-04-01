@@ -5,7 +5,6 @@ import cv2
 import numpy as np
 import uuid
 import logging
-import base64
 
 from services.simulate_future_heatmap import grid_to_risk_map
 from services.env_interpolation import (
@@ -160,17 +159,12 @@ def predict():
         avg_humidity = np.mean([v["humidity"] for v in samples.values()])
         avg_temp = np.mean([v["temperature"] for v in samples.values()])
 
-        frame_urls = []
-        for p in frame_paths:
-            img_frame = cv2.imread(p)
-            _, buffer = cv2.imencode('.webp', img_frame, [cv2.IMWRITE_WEBP_QUALITY, 75])
-            encoded = base64.b64encode(buffer).decode("utf-8")
-            frame_urls.append(f"data:image/webp;base64,{encoded}")
-        with open(output_path, "rb") as f:
-            img_output = cv2.imread(output_path)
-        _, out_buffer = cv2.imencode('.webp', img_output, [cv2.IMWRITE_WEBP_QUALITY, 85])
-        encoded_output = base64.b64encode(out_buffer).decode("utf-8")
-        output_url = f"data:image/webp;base64,{encoded_output}"
+        base_url = request.host_url.rstrip("/")
+        frame_urls = [
+            f"{base_url}/outputs/frames/{os.path.basename(path)}"
+            for path in frame_paths
+        ]
+        output_url = f"{base_url}/outputs/{output_name}"
         job_id = uuid.uuid4().hex
 
         environment_summary = {

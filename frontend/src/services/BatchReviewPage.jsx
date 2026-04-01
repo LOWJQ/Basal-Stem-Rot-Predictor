@@ -54,8 +54,19 @@ export default function BatchReviewPage({
   const isComplete = (entry) =>
     entry.lat !== '' && entry.lon !== '' && entry.altitude !== ''
 
+  const visibleProgress = useMemo(
+    () => entries.reduce((acc, entry) => {
+      acc[entry.id] = itemProgress[entry.id] || 'idle'
+      return acc
+    }, {}),
+    [entries, itemProgress]
+  )
+
   const completeCount = entries.filter(isComplete).length
-  const canAnalyzeAll = completeCount > 0
+  const pendingAnalyzeEntries = entries.filter(
+    (entry) => isComplete(entry) && visibleProgress[entry.id] !== 'done'
+  )
+  const canAnalyzeAll = pendingAnalyzeEntries.length > 0
 
   const buildFormData = (entry) => {
     const formData = new FormData()
@@ -67,21 +78,12 @@ export default function BatchReviewPage({
   }
 
   const handleAnalyzeAll = () => {
-    const completeEntries = entries.filter(isComplete)
-    onAnalyzeAll(completeEntries.map((entry) => ({
+    onAnalyzeAll(pendingAnalyzeEntries.map((entry) => ({
       id: entry.id,
       fileName: entry.file.name,
       formData: buildFormData(entry),
     })))
   }
-
-  const visibleProgress = useMemo(
-    () => entries.reduce((acc, entry) => {
-      acc[entry.id] = itemProgress[entry.id] || 'idle'
-      return acc
-    }, {}),
-    [entries, itemProgress]
-  )
 
   if (entries.length === 0) {
     return (
@@ -140,7 +142,7 @@ export default function BatchReviewPage({
               disabled={!canAnalyzeAll || isLoading || isAddingImages}
             >
               <PlayCircle size={15} />
-              {isLoading ? 'Analyzing...' : `Analyze all (${completeCount})`}
+              {isLoading ? 'Analyzing...' : `Analyze all (${pendingAnalyzeEntries.length})`}
             </button>
           </div>
 
