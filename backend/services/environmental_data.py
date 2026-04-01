@@ -3,18 +3,21 @@ import os
 from dotenv import load_dotenv
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 AGRO_API_KEY = os.getenv("AGRO_API_KEY")
+REQUEST_TIMEOUT_SECONDS = 5
+ENV_REQUEST_EXECUTOR = ThreadPoolExecutor(max_workers=8)
 
 
 def get_weather(lat, lon):
     try:
         url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric"
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
         res.raise_for_status()
         data = res.json()
         return {
@@ -29,7 +32,7 @@ def get_weather(lat, lon):
 def get_soil(lat, lon):
     try:
         url = f"http://api.agromonitoring.com/agro/1.0/soil?lat={lat}&lon={lon}&appid={AGRO_API_KEY}"
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
         res.raise_for_status()
         data = res.json()
         return {"soil_moisture": data["moisture"]}
@@ -39,8 +42,11 @@ def get_soil(lat, lon):
 
 
 def get_environmental_data(lat, lon):
-    weather = get_weather(lat, lon)
-    soil = get_soil(lat, lon)
+    weather_future = ENV_REQUEST_EXECUTOR.submit(get_weather, lat, lon)
+    soil_future = ENV_REQUEST_EXECUTOR.submit(get_soil, lat, lon)
+
+    weather = weather_future.result()
+    soil = soil_future.result()
 
     return {
         "temperature": round(weather["temperature"], 3),

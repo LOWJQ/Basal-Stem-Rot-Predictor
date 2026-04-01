@@ -1,4 +1,5 @@
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor
 
 
 def cluster_infected_points(points, threshold=2):
@@ -38,13 +39,8 @@ def get_cluster_centers(clusters):
 def sample_environment(
     grid_coords, infected_points, get_env_func, image_width, image_height
 ):
-
     grid_size = len(grid_coords)
-
-    samples = {}
-
-    center = grid_coords[grid_size // 2][grid_size // 2]
-    samples[(grid_size // 2, grid_size // 2)] = get_env_func(*center)
+    sample_indexes = {(grid_size // 2, grid_size // 2)}
 
     corners = [
         (0, 0),
@@ -52,11 +48,9 @@ def sample_environment(
         (grid_size - 1, 0),
         (grid_size - 1, grid_size - 1),
     ]
-    for i, j in corners:
-        samples[(i, j)] = get_env_func(*grid_coords[i][j])
+    sample_indexes.update(corners)
 
     clusters = cluster_infected_points(infected_points)
-
     centers = get_cluster_centers(clusters)
 
     for p in centers:
@@ -65,9 +59,19 @@ def sample_environment(
 
         i = max(0, min(grid_size - 1, i))
         j = max(0, min(grid_size - 1, j))
+        sample_indexes.add((i, j))
 
-        if (i, j) not in samples:
-            samples[(i, j)] = get_env_func(*grid_coords[i][j])
+    samples = {}
+    max_workers = min(6, len(sample_indexes)) or 1
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_map = {
+            executor.submit(get_env_func, *grid_coords[i][j]): (i, j)
+            for i, j in sample_indexes
+        }
+
+        for future, index in future_map.items():
+            samples[index] = future.result()
 
     return samples
 

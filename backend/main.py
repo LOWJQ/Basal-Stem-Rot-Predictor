@@ -1,6 +1,5 @@
 import logging
 import os
-import shutil
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,8 +27,6 @@ def create_app():
     app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
     frames_dir = os.path.join(os.path.dirname(__file__), "output", "frames")
-    if os.path.exists(frames_dir):
-        shutil.rmtree(frames_dir)
     os.makedirs(frames_dir, exist_ok=True)
 
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024

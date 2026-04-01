@@ -3,6 +3,7 @@ from services.database import (
     get_history,
     get_scan,
     update_scan_title,
+    update_scan_payload,
     delete_scan,
     delete_all_scans,
 )
@@ -38,6 +39,37 @@ def history_report(scan_id):
         return jsonify({"error": "Report data not available for this scan"}), 404
 
     return jsonify({"report": report})
+
+
+@history_bp.route("/history/<int:scan_id>/simulation-frames", methods=["GET"])
+def history_simulation_frames(scan_id):
+    scan = get_scan(scan_id)
+    if scan is None:
+        return jsonify({"error": "History entry not found"}), 404
+
+    payload = scan.get("payload") or {}
+    simulation_frames = payload.get("simulation_frames") or []
+    simulation_status = payload.get("simulation_frames_status", "complete")
+    simulation_expected_frames = payload.get(
+        "simulation_expected_frames",
+        len(simulation_frames),
+    )
+
+    if (
+        simulation_status == "complete"
+        and simulation_expected_frames > len(simulation_frames)
+    ):
+        simulation_status = "pending"
+        payload["simulation_frames_status"] = simulation_status
+        update_scan_payload(scan_id, payload)
+
+    return jsonify(
+        {
+            "simulation_frames": simulation_frames,
+            "status": simulation_status,
+            "expected_frames": simulation_expected_frames,
+        }
+    )
 
 
 @history_bp.route("/history/<int:scan_id>/report/pdf", methods=["GET"])

@@ -52,6 +52,11 @@ export async function fetchHistoryReport(scanId) {
   return parseResponse(response, 'Failed to load report preview')
 }
 
+export async function fetchHistorySimulationFrames(scanId) {
+  const response = await fetch(`${API_BASE}/history/${scanId}/simulation-frames`)
+  return parseResponse(response, 'Failed to load simulation frames')
+}
+
 export function getHistoryReportPdfUrl(scanId) {
   return `${API_BASE}/history/${scanId}/report/pdf`
 }

@@ -101,6 +101,16 @@ def get_scan(scan_id):
             return None
         return _deserialize_scan(row, include_payload=True)
 
+
+def update_scan_payload(scan_id, payload):
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.execute(
+            "UPDATE scans SET payload = ? WHERE id = ?",
+            (json.dumps(payload) if payload is not None else None, scan_id),
+        )
+        return cursor.rowcount > 0
+
+
 def update_scan_title(scan_id, title):
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.execute(

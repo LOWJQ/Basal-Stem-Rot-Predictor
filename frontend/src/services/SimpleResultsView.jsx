@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { fetchHistorySimulationFrames } from './api'
 
 function formatRiskHeading(risk) {
   if (!risk) return ['RISK AREA', 'SELECTED']
@@ -362,8 +363,27 @@ export default function SimpleResultsView({ result }) {
   const [detailView, setDetailView] = useState('overview')
   const [detailPanelHeight, setDetailPanelHeight] = useState(null)
   const [isSimulationHelpOpen, setIsSimulationHelpOpen] = useState(false)
+  const [resolvedSimulationFrames, setResolvedSimulationFrames] = useState(() => (
+    Array.isArray(result?.simulation_frames) && result.simulation_frames.length
+      ? result.simulation_frames
+      : (result?.output_image ? [result.output_image] : [])
+  ))
+  const [simulationFrameStatus, setSimulationFrameStatus] = useState(
+    result?.simulation_frames_status || 'complete'
+  )
+  const [expectedSimulationFrames, setExpectedSimulationFrames] = useState(
+    Number(result?.simulation_expected_frames) || (
+      Array.isArray(result?.simulation_frames) && result.simulation_frames.length
+        ? result.simulation_frames.length
+        : 1
+    )
+  )
 
-  const simulationImage = result.simulation_frames[selectedWeek]
+  const simulationFrames = resolvedSimulationFrames.length
+    ? resolvedSimulationFrames
+    : (result?.output_image ? [result.output_image] : [])
+  const maxSimulationWeek = Math.max(0, simulationFrames.length - 1)
+  const simulationImage = simulationFrames[selectedWeek] || simulationFrames[0] || result.output_image
   const visibleNarrative = buildRiskNarrative(selectedCell, result.infected_points, result.image_size)
   const riskHeadingLines = formatRiskHeading(selectedCell?.risk)
   const visibleActions = buildContextActions(selectedCell)
@@ -408,6 +428,74 @@ export default function SimpleResultsView({ result }) {
       window.removeEventListener('resize', updateHeight)
     }
   }, [detailView, selectedCell, result])
+
+  useEffect(() => {
+    const nextFrames = Array.isArray(result?.simulation_frames) && result.simulation_frames.length
+      ? result.simulation_frames
+      : (result?.output_image ? [result.output_image] : [])
+
+    setResolvedSimulationFrames(nextFrames)
+    setSimulationFrameStatus(result?.simulation_frames_status || 'complete')
+    setExpectedSimulationFrames(
+      Number(result?.simulation_expected_frames) || nextFrames.length || 1
+    )
+  }, [result])
+
+  useEffect(() => {
+    setSelectedWeek(0)
+  }, [result?.history_id, maxSimulationWeek])
+
+  useEffect(() => {
+    if (!result?.history_id) return undefined
+    if (
+      simulationFrameStatus === 'complete' &&
+      resolvedSimulationFrames.length >= expectedSimulationFrames
+    ) {
+      return undefined
+    }
+
+    let isCancelled = false
+    let timeoutId
+
+    const pollSimulationFrames = async () => {
+      try {
+        const response = await fetchHistorySimulationFrames(result.history_id)
+        if (isCancelled) return
+
+        const nextFrames = Array.isArray(response.simulation_frames) && response.simulation_frames.length
+          ? response.simulation_frames
+          : (result.output_image ? [result.output_image] : [])
+
+        const nextStatus = response.status || 'complete'
+        const nextExpectedFrames = Number(response.expected_frames) || nextFrames.length || 1
+
+        setResolvedSimulationFrames(nextFrames)
+        setSimulationFrameStatus(nextStatus)
+        setExpectedSimulationFrames(nextExpectedFrames)
+
+        if (nextStatus !== 'complete' || nextFrames.length < nextExpectedFrames) {
+          timeoutId = window.setTimeout(pollSimulationFrames, 2000)
+        }
+      } catch {
+        if (!isCancelled) {
+          timeoutId = window.setTimeout(pollSimulationFrames, 4000)
+        }
+      }
+    }
+
+    pollSimulationFrames()
+
+    return () => {
+      isCancelled = true
+      if (timeoutId) window.clearTimeout(timeoutId)
+    }
+  }, [
+    expectedSimulationFrames,
+    resolvedSimulationFrames.length,
+    result?.history_id,
+    result?.output_image,
+    simulationFrameStatus,
+  ])
 
   return (
     <div className="results-page">
@@ -641,7 +729,7 @@ export default function SimpleResultsView({ result }) {
 
               {isSimulationHelpOpen ? (
                 <div className="results-simulation-help-popover" role="note">
-                  Move the timeline to see projected spread over 12 weeks if no intervention is taken.
+                  Move the timeline to see projected spread over {Math.max(0, expectedSimulationFrames - 1)} week{expectedSimulationFrames - 1 === 1 ? '' : 's'} if no intervention is taken.
                 </div>
               ) : null}
             </div>
@@ -659,19 +747,26 @@ export default function SimpleResultsView({ result }) {
           />
         </div>
 
+        {simulationFrameStatus !== 'complete' ? (
+          <p className="results-simulation-status">
+            Preparing future simulation frames...
+          </p>
+        ) : null}
+
         <div className="results-slider-wrap">
           <input
             type="range"
             min="0"
-            max="12"
+            max={maxSimulationWeek}
             value={selectedWeek}
             onChange={(e) => setSelectedWeek(Number(e.target.value))}
             className="results-slider"
+            disabled={maxSimulationWeek === 0}
           />
 
           <div className="results-slider-labels">
             <span>Current state</span>
-            <span>Week 12</span>
+            <span>{maxSimulationWeek === 0 ? 'Current state only' : `Week ${maxSimulationWeek}`}</span>
           </div>
         </div>
       </div>
