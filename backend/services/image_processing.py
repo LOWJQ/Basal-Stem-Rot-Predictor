@@ -7,6 +7,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "model", "model1.pt")
 
 _model_lock = threading.Lock()
+_inference_lock = threading.Lock()
 model = None
 
 
@@ -28,7 +29,10 @@ def detect_infected(image_path):
 
     model = get_model()
 
-    results = model(img)
+    # Ultralytics model inference is not reliably thread-safe when the same
+    # model instance is shared across concurrent Flask requests.
+    with _inference_lock:
+        results = model(img)
     result = results[0]
 
     infected_points = []
