@@ -1,6 +1,6 @@
-// const API_BASE = 'https://divine-surprise-production-58e6.up.railway.app'
+const API_BASE = 'https://divine-surprise-production-58e6.up.railway.app'
 
-const API_BASE = 'http://127.0.0.1:5000'
+// const API_BASE = 'http://127.0.0.1:5000'
 
 async function parseResponse(response, fallbackMessage) {
   let data = {}
