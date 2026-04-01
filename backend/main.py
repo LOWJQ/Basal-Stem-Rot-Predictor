@@ -10,6 +10,7 @@ logging.basicConfig(
 
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 from routes.predict import predict_bp
 from routes.health import health_bp
 from routes.history import history_bp
@@ -24,6 +25,7 @@ DEFAULT_CORS_ORIGINS = [
 
 def create_app():
     app = Flask(__name__)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
     frames_dir = os.path.join(os.path.dirname(__file__), "output", "frames")
     if os.path.exists(frames_dir):

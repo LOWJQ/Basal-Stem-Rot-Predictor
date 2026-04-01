@@ -19,7 +19,8 @@ import {
 } from '../services/api'
 
 const HISTORY_BATCH_STORAGE_KEY = 'bsr-history-batches'
-const MAX_CONCURRENT_ANALYSES = 7
+const LOCAL_MAX_CONCURRENT_ANALYSES = 7
+const DEPLOYED_MAX_CONCURRENT_ANALYSES = 3
 
 function readStoredHistoryBatches() {
   try {
@@ -117,6 +118,19 @@ async function runWithConcurrencyLimit(items, limit, worker) {
   const runnerCount = Math.min(limit, items.length)
   await Promise.all(Array.from({ length: runnerCount }, () => runner()))
   return results
+}
+
+function getMaxConcurrentAnalyses() {
+  if (typeof window === 'undefined') {
+    return DEPLOYED_MAX_CONCURRENT_ANALYSES
+  }
+
+  const hostname = window.location.hostname
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1'
+
+  return isLocalhost
+    ? LOCAL_MAX_CONCURRENT_ANALYSES
+    : DEPLOYED_MAX_CONCURRENT_ANALYSES
 }
 
 export default function Home() {
@@ -271,7 +285,7 @@ export default function Home() {
       let settledCount = 0
       const settledResults = await runWithConcurrencyLimit(
         batchItems,
-        MAX_CONCURRENT_ANALYSES,
+        getMaxConcurrentAnalyses(),
         async (item) => {
           const batchResult = await runScan(item.formData)
           settledCount += 1
