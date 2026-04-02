@@ -56,11 +56,12 @@ def get_environmental_data(lat, lon):
 
 
 cache = {}
-CACHE_TTL = 900
+CACHE_TTL = 1800
+CACHE_PRECISION = 2
 
 
 def get_env_cached(lat, lon):
-    key = (round(lat, 4), round(lon, 4))
+    key = (round(lat, CACHE_PRECISION), round(lon, CACHE_PRECISION))
     now = time.time()
 
     if key in cache and (now - cache[key]["timestamp"]) < CACHE_TTL:

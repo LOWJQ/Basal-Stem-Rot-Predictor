@@ -40,41 +40,12 @@ def sample_environment(
     grid_coords, infected_points, get_env_func, image_width, image_height
 ):
     grid_size = len(grid_coords)
-    sample_indexes = {(grid_size // 2, grid_size // 2)}
+    ci = grid_size // 2
+    cj = grid_size // 2
 
-    corners = [
-        (0, 0),
-        (0, grid_size - 1),
-        (grid_size - 1, 0),
-        (grid_size - 1, grid_size - 1),
-    ]
-    sample_indexes.update(corners)
+    centre_env = get_env_func(*grid_coords[ci][cj])
 
-    clusters = cluster_infected_points(infected_points)
-    centers = get_cluster_centers(clusters)
-
-    for p in centers:
-        i = int((p["y"] / image_height) * grid_size)
-        j = int((p["x"] / image_width) * grid_size)
-
-        i = max(0, min(grid_size - 1, i))
-        j = max(0, min(grid_size - 1, j))
-        sample_indexes.add((i, j))
-
-    samples = {}
-    max_workers = min(6, len(sample_indexes)) or 1
-
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_map = {
-            executor.submit(get_env_func, *grid_coords[i][j]): (i, j)
-            for i, j in sample_indexes
-        }
-
-        for future, index in future_map.items():
-            samples[index] = future.result()
-
-    return samples
-
+    return {(ci, cj): centre_env}
 
 def interpolate_env(grid_coords, samples):
     grid_size = len(grid_coords)

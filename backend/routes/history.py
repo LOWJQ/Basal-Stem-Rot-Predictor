@@ -2,13 +2,14 @@ from flask import Blueprint, jsonify, request, send_file
 from services.database import (
     get_history,
     get_scan,
+    update_scan_payload, 
     update_scan_title,
     delete_scan,
     delete_all_scans,
 )
 from services.pdf_export import build_report_pdf
 from services.excel_export import build_report_excel
-from services.simulation_frames import ensure_simulation_frames
+from services.simulation_frames import submit_simulation_frame_render
 
 history_bp = Blueprint("history", __name__)
 
@@ -55,17 +56,18 @@ def history_simulation_frames(scan_id):
         len(simulation_frames),
     )
 
-    if simulation_status != "complete" or len(simulation_frames) < simulation_expected_frames:
-        ensure_simulation_frames(scan_id, request.host_url.rstrip("/"))
-        refreshed_scan = get_scan(scan_id)
-        if refreshed_scan is not None:
-            payload = refreshed_scan.get("payload") or {}
-            simulation_frames = payload.get("simulation_frames") or simulation_frames
-            simulation_status = payload.get("simulation_frames_status", simulation_status)
-            simulation_expected_frames = payload.get(
-                "simulation_expected_frames",
-                simulation_expected_frames,
-            )
+    if simulation_status not in ("complete", "error", "rendering"):
+        base_url = request.host_url.rstrip("/")
+        started = submit_simulation_frame_render(scan_id, base_url)
+        if started:
+            simulation_status = "rendering"
+
+    elif simulation_status == "error":
+        base_url = request.host_url.rstrip("/")
+        payload["simulation_frames_status"] = "pending"
+        update_scan_payload(scan_id, payload)
+        submit_simulation_frame_render(scan_id, base_url)
+        simulation_status = "rendering"
 
     return jsonify(
         {
@@ -74,7 +76,6 @@ def history_simulation_frames(scan_id):
             "expected_frames": simulation_expected_frames,
         }
     )
-
 
 @history_bp.route("/history/<int:scan_id>/report/pdf", methods=["GET"])
 def history_report_pdf(scan_id):
