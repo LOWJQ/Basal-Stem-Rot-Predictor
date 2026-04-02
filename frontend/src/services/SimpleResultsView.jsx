@@ -378,7 +378,7 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
         : 1
     )
   )
-  
+
   const [localReport, setLocalReport] = useState(result?.report ?? null)
 
   const simulationFrames = resolvedSimulationFrames.length
@@ -618,7 +618,7 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
             </div>
 
             <span className="results-legend-selection">
-              Black outline = selected grid cell
+              🔵 Blue dots = infected trees
             </span>
           </div>
 
