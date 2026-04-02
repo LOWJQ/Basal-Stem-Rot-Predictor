@@ -43,6 +43,8 @@ os.makedirs(SOURCE_DIR, exist_ok=True)
 def predict():
     temp_path = None
 
+    device_id = request.headers.get("X-Device-Id", "unknown")
+
     lat = request.form.get("lat")
     lon = request.form.get("lon")
 
@@ -186,6 +188,7 @@ def predict():
                 **environment_summary,
             },
             "output_image": output_url,
+            "output_image_b64": output_url,
             "simulation_frames": [output_url],
             "simulation_frames_status": "pending",
             "simulation_expected_frames": simulation_expected_frames,
@@ -235,6 +238,7 @@ def predict():
             environment_summary,
             payload=response_data,
             title=default_title,
+            device_id=device_id,
         )
 
         response_data["history_id"] = scan_id
@@ -243,11 +247,12 @@ def predict():
         submit_simulation_frame_render(scan_id)
 
         logger.info(
-            "Predict success - lat=%s lon=%s infected=%s id=%s",
+            "Predict success - lat=%s lon=%s infected=%s id=%s device=%s",
             lat,
             lon,
             len(infected_points),
             job_id,
+            device_id,
         )
 
         return jsonify({"status": "success", "data": response_data})

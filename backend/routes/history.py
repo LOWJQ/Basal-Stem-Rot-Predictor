@@ -16,7 +16,8 @@ history_bp = Blueprint("history", __name__)
 
 @history_bp.route("/history", methods=["GET"])
 def history():
-    return jsonify({"scans": get_history(limit=20)})
+    device_id = request.headers.get("X-Device-Id", "unknown")
+    return jsonify({"scans": get_history(limit=20, device_id=device_id)})
 
 
 @history_bp.route("/history/<int:scan_id>", methods=["GET"])

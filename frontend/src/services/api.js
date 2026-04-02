@@ -1,3 +1,12 @@
+function getDeviceId() {
+  let id = localStorage.getItem('bsr_device_id')
+  if (!id) {
+    id = crypto.randomUUID()
+    localStorage.setItem('bsr_device_id', id)
+  }
+  return id
+}
+
 const API_BASE =
   process.env.REACT_APP_API_BASE_URL ||
   'https://divine-surprise-production-58e6.up.railway.app'
@@ -24,6 +33,7 @@ export async function predictScan(formData) {
   try {
     const response = await fetch(`${API_BASE}/predict`, {
       method: 'POST',
+      headers: { 'X-Device-Id': getDeviceId() },
       body: formData,
     })
 
@@ -38,22 +48,30 @@ export async function predictScan(formData) {
 }
 
 export async function fetchHistory() {
-  const response = await fetch(`${API_BASE}/history`)
+  const response = await fetch(`${API_BASE}/history`, {
+    headers: { 'X-Device-Id': getDeviceId() },
+  })
   return parseResponse(response, 'Failed to load history')
 }
 
 export async function fetchHistoryScan(scanId) {
-  const response = await fetch(`${API_BASE}/history/${scanId}`)
+  const response = await fetch(`${API_BASE}/history/${scanId}`, {
+    headers: { 'X-Device-Id': getDeviceId() },
+  })
   return parseResponse(response, 'Failed to load history entry')
 }
 
 export async function fetchHistoryReport(scanId) {
-  const response = await fetch(`${API_BASE}/history/${scanId}/report`)
+  const response = await fetch(`${API_BASE}/history/${scanId}/report`, {
+    headers: { 'X-Device-Id': getDeviceId() },
+  })
   return parseResponse(response, 'Failed to load report preview')
 }
 
 export async function fetchHistorySimulationFrames(scanId) {
-  const response = await fetch(`${API_BASE}/history/${scanId}/simulation-frames`)
+  const response = await fetch(`${API_BASE}/history/${scanId}/simulation-frames`, {
+    headers: { 'X-Device-Id': getDeviceId() },
+  })
   return parseResponse(response, 'Failed to load simulation frames')
 }
 
@@ -70,6 +88,7 @@ export async function renameHistoryScan(scanId, title) {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
+      'X-Device-Id': getDeviceId(),
     },
     body: JSON.stringify({ title }),
   })
@@ -80,6 +99,7 @@ export async function renameHistoryScan(scanId, title) {
 export async function deleteHistoryScan(scanId) {
   const response = await fetch(`${API_BASE}/history/${scanId}`, {
     method: 'DELETE',
+    headers: { 'X-Device-Id': getDeviceId() },
   })
 
   return parseResponse(response, 'Failed to delete history entry')
@@ -88,6 +108,7 @@ export async function deleteHistoryScan(scanId) {
 export async function deleteAllHistoryScans() {
   const response = await fetch(`${API_BASE}/history`, {
     method: 'DELETE',
+    headers: { 'X-Device-Id': getDeviceId() },
   })
 
   return parseResponse(response, 'Failed to delete all history')

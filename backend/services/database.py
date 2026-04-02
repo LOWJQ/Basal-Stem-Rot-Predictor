@@ -44,14 +44,16 @@ def init_db():
                 medium_cells       INTEGER,
                 low_cells          INTEGER,
                 env_summary        TEXT,
-                payload            TEXT
+                payload            TEXT,
+                device_id          TEXT
             )
         """)
         _ensure_column(conn, "scans", "payload", "TEXT")
         _ensure_column(conn, "scans", "title", "TEXT")
+        _ensure_column(conn, "scans", "device_id", "TEXT")
 
 
-def save_scan(lat, lon, altitude, infected_points, heatmap, env_summary, payload=None, title=None):
+def save_scan(lat, lon, altitude, infected_points, heatmap, env_summary, payload=None, title=None, device_id=None):
     high   = sum(1 for c in heatmap if c["risk"] == "high")
     medium = sum(1 for c in heatmap if c["risk"] == "medium")
     low    = sum(1 for c in heatmap if c["risk"] == "low")
@@ -64,8 +66,8 @@ def save_scan(lat, lon, altitude, infected_points, heatmap, env_summary, payload
         cursor = conn.execute("""
             INSERT INTO scans
             (timestamp, title, lat, lon, altitude, infected_count, avg_risk_score,
-            high_cells, medium_cells, low_cells, env_summary, payload)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            high_cells, medium_cells, low_cells, env_summary, payload, device_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             datetime.utcnow().isoformat(),
             title,
@@ -75,6 +77,7 @@ def save_scan(lat, lon, altitude, infected_points, heatmap, env_summary, payload
             high, medium, low,
             json.dumps(env_summary),
             json.dumps(payload) if payload is not None else None,
+            device_id,
         ))
         return cursor.lastrowid
 
@@ -91,10 +94,11 @@ def _deserialize_scan(row, include_payload=False):
     return scan
 
 
-def get_history(limit=20):
+def get_history(limit=20, device_id=None):
     with _connect(sqlite3.Row) as conn:
         rows = conn.execute(
-            "SELECT * FROM scans ORDER BY timestamp DESC LIMIT ?", (limit,)
+            "SELECT * FROM scans WHERE device_id = ? ORDER BY timestamp DESC LIMIT ?",
+            (device_id, limit)
         ).fetchall()
         return [_deserialize_scan(row) for row in rows]
 

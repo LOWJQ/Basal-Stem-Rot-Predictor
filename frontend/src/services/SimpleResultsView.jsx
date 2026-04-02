@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchHistorySimulationFrames, fetchHistoryReport } from './api'
 
+const [localReport, setLocalReport] = useState(result?.report ?? null)
+
 function formatRiskHeading(risk) {
   if (!risk) return ['RISK AREA', 'SELECTED']
   if (risk === 'high') return ['HIGH RISK -', 'IMMEDIATE ACTION']
@@ -395,8 +397,8 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
   const detectionConfidenceSummary = getDetectionConfidenceSummary(result.infected_points)
   const detectionConfidenceRange = getDetectionConfidenceRange(result.infected_points)
   const executiveSummary = buildExecutiveSummary(result)
-  const estimatedYieldAtRisk = result.report?.summary?.estimated_yield_at_risk_tonnes
-  const yieldRiskAssumptions = result.report?.summary?.yield_risk_assumptions
+  const estimatedYieldAtRisk = localReport?.summary?.estimated_yield_at_risk_tonnes
+  const yieldRiskAssumptions = localReport?.summary?.yield_risk_assumptions
   const yieldRiskSignal = getYieldAtRiskSignal(estimatedYieldAtRisk)
 
   const handleSelectCell = (cell) => {
@@ -483,8 +485,9 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
           if (result?.history_id) {
             try {
               const reportResponse = await fetchHistoryReport(result.history_id)
-              if (reportResponse?.report && onReportUpdate) {
-                onReportUpdate(reportResponse.report)
+              if (reportResponse?.report) {
+                setLocalReport(reportResponse.report)
+                if (onReportUpdate) onReportUpdate(reportResponse.report)
               }
             } catch {
             }
