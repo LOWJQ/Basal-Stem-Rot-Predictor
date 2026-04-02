@@ -2,7 +2,6 @@ import base64
 import logging
 import os
 import threading
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 from services.database import get_scan, update_scan_payload

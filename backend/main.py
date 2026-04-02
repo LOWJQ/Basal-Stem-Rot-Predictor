@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,6 +15,7 @@ from routes.predict import predict_bp
 from routes.health import health_bp
 from routes.history import history_bp
 from services.database import init_db
+from services.image_processing import get_model
 
 DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000",
@@ -67,6 +69,14 @@ def create_app():
         return jsonify({"error": "Internal server error"}), 500
 
     init_db()
+
+    def _warm_model():
+        try:
+            get_model()
+        except Exception:
+            pass
+
+    threading.Thread(target=_warm_model, daemon=True).start()
 
     return app
 

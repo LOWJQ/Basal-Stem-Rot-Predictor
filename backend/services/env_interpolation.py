@@ -1,6 +1,4 @@
 import numpy as np
-from concurrent.futures import ThreadPoolExecutor
-
 
 def cluster_infected_points(points, threshold=2):
     clusters = []
