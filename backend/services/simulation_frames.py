@@ -1,34 +1,28 @@
-from concurrent.futures import ThreadPoolExecutor
+import base64
 import logging
 import os
 import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 from services.database import get_scan, update_scan_payload
 from services.report_builder import build_simulation_summary
 from services.simulate_future_heatmap import grid_to_risk_map, simulate_future_steps
-from services.visualization import draw_heatmap
-
+from services.visualization import draw_heatmap_to_bytes
 
 logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
-FRAMES_DIR = os.path.join(OUTPUT_DIR, "frames")
 SOURCE_DIR = os.path.join(OUTPUT_DIR, "sources")
 
 SIMULATION_RENDER_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 _active_render_lock = threading.Lock()
 _active_renders = set()
 
-os.makedirs(FRAMES_DIR, exist_ok=True)
 os.makedirs(SOURCE_DIR, exist_ok=True)
 
 DEFAULT_SIMULATION_EXPECTED_FRAMES = 13
-
-
-def build_output_url(base_url, relative_path):
-    return f"{base_url}/outputs/{relative_path.replace(os.sep, '/')}"
 
 
 def _mark_render_active(scan_id):
@@ -44,7 +38,7 @@ def _clear_render_active(scan_id):
         _active_renders.discard(scan_id)
 
 
-def _render_simulation_frames(scan_id, base_url):
+def _render_simulation_frames(scan_id):
     scan = get_scan(scan_id)
     if scan is None:
         logger.warning("Simulation render skipped - scan %s not found", scan_id)
@@ -61,24 +55,23 @@ def _render_simulation_frames(scan_id, base_url):
     source_image_name = (payload.get("assets") or {}).get("source_image_name")
     env_grid = payload.get("env_grid")
     image_size = payload.get("image_size") or {}
-    output_image_url = payload.get("output_image")
     initial_heatmap = payload.get("heatmap_grid")
+    initial_frame_b64 = payload.get("output_image_b64")
 
-    if not initial_heatmap or not source_image_name or not env_grid:
-        logger.warning(
-            "Simulation render skipped for scan %s - missing heatmap_grid, source_image_name, or env_grid",
-            scan_id,
-        )
+    if not initial_heatmap or not env_grid:
+        logger.warning("Simulation render skipped for scan %s - missing data", scan_id)
         payload["simulation_frames_status"] = "error"
         update_scan_payload(scan_id, payload)
         return False
 
-    source_image_path = os.path.join(SOURCE_DIR, source_image_name)
-    if not os.path.exists(source_image_path):
-        logger.warning(
-            "Simulation render failed for scan %s - source image missing at %s",
-            scan_id, source_image_path,
-        )
+    source_image_path = None
+    if source_image_name:
+        candidate = os.path.join(SOURCE_DIR, source_image_name)
+        if os.path.exists(candidate):
+            source_image_path = candidate
+
+    if source_image_path is None and not initial_frame_b64:
+        logger.warning("Simulation render failed for scan %s - no source image", scan_id)
         payload["simulation_frames_status"] = "error"
         update_scan_payload(scan_id, payload)
         return False
@@ -86,7 +79,6 @@ def _render_simulation_frames(scan_id, base_url):
     width = int(image_size.get("width") or 0)
     height = int(image_size.get("height") or 0)
     if width <= 0 or height <= 0:
-        logger.warning("Simulation render failed for scan %s - invalid image dimensions", scan_id)
         payload["simulation_frames_status"] = "error"
         update_scan_payload(scan_id, payload)
         return False
@@ -95,36 +87,34 @@ def _render_simulation_frames(scan_id, base_url):
         payload["simulation_frames_status"] = "rendering"
         update_scan_payload(scan_id, payload)
 
-        frame_urls = [output_image_url] if output_image_url else []
+        frame_b64_list = [initial_frame_b64] if initial_frame_b64 else []
         future_steps = simulate_future_steps(initial_heatmap, steps=12)
 
         for idx, step_heatmap in enumerate(future_steps, start=1):
             step_risk_map = grid_to_risk_map(step_heatmap, width, height)
-            frame_name = f"scan_{scan_id}_week_{idx}_{uuid.uuid4().hex}.jpg"
-            frame_path = os.path.join(FRAMES_DIR, frame_name)
-            draw_heatmap(
+            img_bytes = draw_heatmap_to_bytes(
                 source_image_path,
                 step_risk_map,
                 [],
                 env_grid,
-                frame_path,
                 week=idx,
             )
-            frame_urls.append(
-                build_output_url(base_url, os.path.join("frames", frame_name))
-            )
+            if img_bytes:
+                b64 = base64.b64encode(img_bytes).decode("utf-8")
+                frame_b64_list.append(f"data:image/jpeg;base64,{b64}")
 
-        payload["simulation_frames"] = frame_urls
+        payload["simulation_frames"] = frame_b64_list
         payload["simulation_frames_status"] = "complete"
+
         if payload.get("report"):
             payload["report"]["simulation"] = build_simulation_summary(
                 [initial_heatmap] + future_steps
             )
+
         update_scan_payload(scan_id, payload)
-        logger.info(
-            "Simulation frames complete for scan %s (%d frames)", scan_id, len(frame_urls)
-        )
+        logger.info("Simulation frames complete for scan %s (%d frames)", scan_id, len(frame_b64_list))
         return True
+
     except Exception as exc:
         logger.exception("Simulation rendering failed for scan %s: %s", scan_id, exc)
         payload["simulation_frames_status"] = "error"
@@ -132,28 +122,19 @@ def _render_simulation_frames(scan_id, base_url):
         return False
 
 
-def _background_render(scan_id, base_url):
+def _background_render(scan_id):
     try:
-        _render_simulation_frames(scan_id, base_url)
+        _render_simulation_frames(scan_id)
     finally:
         _clear_render_active(scan_id)
 
 
-def submit_simulation_frame_render(scan_id, base_url):
+def submit_simulation_frame_render(scan_id, base_url=None):
     if not _mark_render_active(scan_id):
         return False
     try:
-        SIMULATION_RENDER_EXECUTOR.submit(_background_render, scan_id, base_url)
+        SIMULATION_RENDER_EXECUTOR.submit(_background_render, scan_id)
         return True
     except Exception:
         _clear_render_active(scan_id)
         raise
-
-
-def ensure_simulation_frames(scan_id, base_url):
-    if not _mark_render_active(scan_id):
-        return False
-    try:
-        return _render_simulation_frames(scan_id, base_url)
-    finally:
-        _clear_render_active(scan_id)

@@ -57,16 +57,14 @@ def history_simulation_frames(scan_id):
     )
 
     if simulation_status not in ("complete", "error", "rendering"):
-        base_url = request.host_url.rstrip("/")
-        started = submit_simulation_frame_render(scan_id, base_url)
+        started = submit_simulation_frame_render(scan_id)
         if started:
             simulation_status = "rendering"
 
     elif simulation_status == "error":
-        base_url = request.host_url.rstrip("/")
         payload["simulation_frames_status"] = "pending"
         update_scan_payload(scan_id, payload)
-        submit_simulation_frame_render(scan_id, base_url)
+        submit_simulation_frame_render(scan_id)
         simulation_status = "rendering"
 
     return jsonify(

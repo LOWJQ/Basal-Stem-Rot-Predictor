@@ -2,6 +2,7 @@ from datetime import datetime
 import logging
 import os
 import uuid
+import base64
 
 import cv2
 import numpy as np
@@ -21,7 +22,6 @@ from services.risk_analysis import generate_heatmap_grid, generate_risk_map
 from services.simulate_future_heatmap import grid_to_risk_map
 from services.simulation_frames import (
     DEFAULT_SIMULATION_EXPECTED_FRAMES,
-    build_output_url,
     submit_simulation_frame_render,
 )
 from services.visualization import draw_heatmap
@@ -159,9 +159,12 @@ def predict():
         avg_humidity = np.mean([value["humidity"] for value in samples.values()])
         avg_temp = np.mean([value["temperature"] for value in samples.values()])
 
-        base_url = request.host_url.rstrip("/")
-        output_url = build_output_url(base_url, output_name)
         job_id = uuid.uuid4().hex
+
+        # Read the saved output image as base64
+        with open(output_path, "rb") as f:
+            output_b64 = base64.b64encode(f.read()).decode("utf-8")
+        output_url = f"data:image/jpeg;base64,{output_b64}"
 
         environment_summary = {
             "avg_soil_moisture": round(float(avg_soil), 3),
@@ -237,7 +240,7 @@ def predict():
         response_data["history_id"] = scan_id
         response_data["title"] = default_title
 
-        submit_simulation_frame_render(scan_id, base_url)
+        submit_simulation_frame_render(scan_id)
 
         logger.info(
             "Predict success - lat=%s lon=%s infected=%s id=%s",

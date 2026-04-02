@@ -6,25 +6,50 @@ import os
 def draw_heatmap(
     image_path, risk_map, current_points, env_grid, output_path, week=None
 ):
-
     img = cv2.imread(image_path)
 
     if img is None:
         raise ValueError("Invalid image path")
 
+    overlay = _build_overlay(img, risk_map, current_points, week)
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    cv2.imwrite(output_path, overlay)
+
+    return output_path
+
+
+def draw_heatmap_to_bytes(
+    image_path, risk_map, current_points, env_grid, week=None
+):
+    """Same as draw_heatmap but returns JPEG bytes instead of writing a file.
+    image_path may be None — in that case returns None.
+    """
+    if not image_path or not os.path.exists(image_path):
+        return None
+
+    img = cv2.imread(image_path)
+    if img is None:
+        return None
+
+    overlay = _build_overlay(img, risk_map, current_points, week)
+
+    success, buffer = cv2.imencode(".jpg", overlay, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    if not success:
+        return None
+
+    return buffer.tobytes()
+
+
+def _build_overlay(img, risk_map, current_points, week=None):
     height, width = img.shape[:2]
 
     if risk_map.shape != (height, width):
         risk_map = cv2.resize(risk_map, (width, height), interpolation=cv2.INTER_LINEAR)
 
-    combined = risk_map
-
-    heatmap = np.clip(combined, 0, 1)
-
+    heatmap = np.clip(risk_map, 0, 1)
     heatmap = np.power(heatmap, 0.8)
-
     heatmap = (heatmap * 255).astype(np.uint8)
-
     heatmap_color = apply_custom_colormap(heatmap)
 
     overlay = cv2.addWeighted(img, 0.6, heatmap_color, 0.4, 0)
@@ -45,10 +70,7 @@ def draw_heatmap(
             2,
         )
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    cv2.imwrite(output_path, overlay)
-
-    return output_path
+    return overlay
 
 
 def apply_custom_colormap(heatmap):
