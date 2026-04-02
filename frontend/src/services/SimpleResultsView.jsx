@@ -401,7 +401,6 @@ export default function SimpleResultsView({ result }) {
 
   const handleSelectCell = (cell) => {
     setSelectedCell(cell)
-    setDetailView('overview')
   }
 
   useEffect(() => {
