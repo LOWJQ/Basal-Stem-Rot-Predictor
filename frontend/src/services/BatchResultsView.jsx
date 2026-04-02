@@ -24,6 +24,7 @@ export default function BatchResultsView({
   onSelectHistory,
 }) {
   const [resultViewMode, setResultViewMode] = useState('analysis')
+  const [reportOverrides, setReportOverrides] = useState({})
 
   const currentPage = useMemo(() => {
     const index = results.findIndex((item) => item.history_id === selectedHistoryId)
@@ -36,6 +37,17 @@ export default function BatchResultsView({
     () => getVisiblePages(currentPage, totalPages),
     [currentPage, totalPages]
   )
+
+  const handleReportUpdate = (updatedReport) => {
+    if (!currentResult?.history_id) return
+    setReportOverrides((prev) => ({
+      ...prev,
+      [currentResult.history_id]: updatedReport,
+    }))
+  }
+
+  const effectiveReport =
+    reportOverrides[currentResult?.history_id] ?? currentResult?.report
 
   useEffect(() => {
     setResultViewMode('analysis')
@@ -50,7 +62,7 @@ export default function BatchResultsView({
 
   return (
     <div className="batch-results-page">
-      {currentResult?.report ? (
+      {effectiveReport ? (
         <div className="batch-results-toggle-wrap">
           <div className="result-view-toggle">
             <button
@@ -71,9 +83,9 @@ export default function BatchResultsView({
         </div>
       ) : null}
 
-      {resultViewMode === 'report' && currentResult?.report
-        ? <ReportPreviewView report={currentResult.report} historyId={currentResult.history_id} />
-        : <SimpleResultsView result={currentResult} />}
+      {resultViewMode === 'report' && effectiveReport
+        ? <ReportPreviewView report={effectiveReport} historyId={currentResult.history_id} />
+        : <SimpleResultsView result={currentResult} onReportUpdate={handleReportUpdate} />}
 
       <nav className="batch-pagination" aria-label="Batch results pagination">
         <button
