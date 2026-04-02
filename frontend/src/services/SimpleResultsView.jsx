@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchHistorySimulationFrames, fetchHistoryReport } from './api'
 
-const [localReport, setLocalReport] = useState(result?.report ?? null)
-
 function formatRiskHeading(risk) {
   if (!risk) return ['RISK AREA', 'SELECTED']
   if (risk === 'high') return ['HIGH RISK -', 'IMMEDIATE ACTION']
@@ -380,6 +378,8 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
         : 1
     )
   )
+  
+  const [localReport, setLocalReport] = useState(result?.report ?? null)
 
   const simulationFrames = resolvedSimulationFrames.length
     ? resolvedSimulationFrames
