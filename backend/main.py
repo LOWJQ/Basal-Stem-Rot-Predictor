@@ -45,7 +45,7 @@ def create_app():
         resources={r"/*": {"origins": allowed_origins}},
         supports_credentials=False,
         methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization"],
+        allow_headers=["Content-Type", "Authorization", "X-Device-Id"],
     )
 
     app.register_blueprint(predict_bp)
