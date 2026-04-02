@@ -353,7 +353,7 @@ function buildExecutiveSummary(result) {
   return 'No infected trees were directly detected. Continue routine monitoring across the scanned area.'
 }
 
-export default function SimpleResultsView({ result }) {
+export default function SimpleResultsView({ result, onReportUpdate }) {
   const visualColumnRef = useRef(null)
   const [selectedCell, setSelectedCell] = useState(() => {
     if (!result?.heatmap?.length) return null
