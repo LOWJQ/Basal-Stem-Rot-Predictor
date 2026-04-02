@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { fetchHistorySimulationFrames } from './api'
+import { fetchHistorySimulationFrames, fetchHistoryReport } from './api'
 
 function formatRiskHeading(risk) {
   if (!risk) return ['RISK AREA', 'SELECTED']
@@ -476,6 +476,19 @@ export default function SimpleResultsView({ result }) {
         setExpectedSimulationFrames(nextExpectedFrames)
 
         if (nextStatus === 'error') {
+          return
+        }
+
+        if (nextStatus === 'complete' && nextFrames.length >= nextExpectedFrames) {
+          if (result?.history_id) {
+            try {
+              const reportResponse = await fetchHistoryReport(result.history_id)
+              if (reportResponse?.report && onReportUpdate) {
+                onReportUpdate(reportResponse.report)
+              }
+            } catch {
+            }
+          }
           return
         }
 
