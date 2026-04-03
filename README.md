@@ -30,12 +30,13 @@ There is a clear need for an early-warning and predictive system to identify hig
 
 This project provides a full-stack AI system that converts plantation images into actionable insights:
 
-1. User upload drone image, GPS location and altitude of the drone  
-2. Detect infected trees using computer vision  
-3. Integrate live environmental data (temperature, humidity, soil moisture)
-4. Generate a spatial risk heatmap across the plantation grid 
-5. Simulate future disease spread up to 12 weeks ahead 
-6. Save, visualize, and export reports as PDF or Excel
+1. Users upload drone images with EXIF metadata
+2. GPS data (longitude, latitude, altitude) is automatically extracted
+3. Detect infected trees using computer vision  
+4. Live environmental data (temperature, humidity, soil moisture) is integrated via API calls
+5. Generate a spatial risk heatmap across the plantation grid 
+6. Simulate future disease spread up to 12 weeks ahead 
+7. Save, visualize, and export reports as PDF or Excel
 
 ---
 
