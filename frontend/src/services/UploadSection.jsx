@@ -98,6 +98,15 @@ export default function UploadSection({ onReview, isLoading, error }) {
           />
         </div>
 
+        <div style={{ textAlign: 'center', marginTop: '12px' }}>
+
+          <a href="https://drive.google.com/uc?export=download&id=1gj41lPXMzr0JjqIXjFu1Fnt7rxXVNgCt"
+            style={{ fontSize: '15px', color: '#666', textDecoration: 'underline', cursor: 'pointer' }}
+          >
+            Don't have a drone image? Download a sample to try
+          </a>
+        </div>
+
         {error && <div className="error-message">{error}</div>}
       </motion.div>
     </div>
