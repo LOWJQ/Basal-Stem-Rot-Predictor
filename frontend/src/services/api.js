@@ -7,9 +7,24 @@ function getDeviceId() {
   return id
 }
 
-const API_BASE =
-  process.env.REACT_APP_API_BASE_URL ||
-  'https://divine-surprise-production-58e6.up.railway.app'
+const DEPLOYED_API_BASE = 'https://divine-surprise-production-58e6.up.railway.app'
+const LOCAL_API_BASE = 'http://127.0.0.1:5000'
+
+function resolveApiBase() {
+  if (process.env.REACT_APP_API_BASE_URL) {
+    return process.env.REACT_APP_API_BASE_URL
+  }
+
+  const hostname = window.location.hostname
+  const isLocalhost =
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '[::1]'
+
+  return isLocalhost ? LOCAL_API_BASE : DEPLOYED_API_BASE
+}
+
+const API_BASE = resolveApiBase()
 
 async function parseResponse(response, fallbackMessage) {
   let data = {}

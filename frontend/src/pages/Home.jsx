@@ -609,7 +609,7 @@ export default function Home() {
           >
             <Menu size={18} />
           </button>
-          <div className="brand">Basal Stem Rot Predictor</div>
+          <div className="brand">PalmGuard AI</div>
         </header>
 
         <main className="hero-layout">

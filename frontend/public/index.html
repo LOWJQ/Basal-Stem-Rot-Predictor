@@ -1,11 +1,250 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>BSR Prediction</title>
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PalmGuard AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+  <script>
+    ; (() => {
+      const params = new URLSearchParams(window.location.search)
+      const isAnalysisView = params.get('view') === 'analysis'
+      document.documentElement.dataset.view = isAnalysisView ? 'analysis' : 'landing'
+    })()
+  </script>
+</head>
+
+<body>
+  <div id="landing-page" class="landing-page" style="--landing-hero-image: url('./Palm_Oil_Background_IMG.jpg')">
+    <header class="landing-nav">
+      <div class="brand-lockup" aria-label="PalmGuard AI">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M6.2 17.6c4.5-1.1 8-4.3 10.2-9.4.7 4.2-.5 7.7-3.4 10.5-2.4 2.3-5.5 3.6-8.7 3.8 1-1.7 1.7-3.3 1.9-4.9Z"
+            fill="currentColor" />
+          <path d="M13.7 4.5c-2 5.3-5.5 8.8-10.5 10.4 2.6-3.8 6-7.2 10.5-10.4Z" fill="currentColor" opacity="0.7" />
+        </svg>
+        <span>PalmGuard</span>
+      </div>
+
+      <nav class="nav-links">
+        <a class="nav-link" href="#how-it-works">How It Works</a>
+        <a class="nav-link" href="#impact">Impact</a>
+        <button class="pill-button solid" type="button" onclick="goToAnalysis()">
+          Get Started
+        </button>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero-section">
+        <div class="hero-content">
+          <p class="hero-kicker">Powered by AI &middot; Built for plantations</p>
+          <h1 class="hero-title">
+            The Intelligent Platform to
+            <br>
+            Detect, Analyze, and Predict
+            <br>
+            Palm Oil Basal Stem Rot
+            </br>
+          </h1>
+          <p class="hero-subtitle">
+            From drone image to treatment plan.
+            <br>
+            Detect and Predict Ganoderma infection before it spreads.
+            </br>
+          </p>
+
+          <div class="hero-cta-wrap">
+            <button class="pill-button solid hero-cta" type="button" onclick="goToAnalysis()">
+              Get Started &rarr;
+            </button>
+            <div class="hero-note">No account required &middot; Free to try</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="trusted-strip" id="features">
+        <p class="trusted-label">Trusted By</p>
+        <div class="trusted-grid">
+          <div class="trusted-badge">FELDA</div>
+          <div class="trusted-badge">IOI Group</div>
+          <div class="trusted-badge">Sime Darby</div>
+          <div class="trusted-badge">MPOB</div>
+          <div class="trusted-badge">Golden Agri</div>
+        </div>
+      </section>
+
+      <section class="how-section" id="how-it-works">
+        <div class="section-inner">
+          <h2 class="section-title">From drone to diagnosis in minutes</h2>
+          <div class="card-grid">
+            <article class="step-card">
+              <div class="step-icon" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </div>
+              <div class="step-number">01. Upload</div>
+              <h3 class="step-title">Upload</h3>
+              <p class="step-copy">
+                Drop in your drone images. GPS coordinates are extracted automatically.
+              </p>
+            </article>
+
+            <article class="step-card">
+              <div class="step-icon" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path d="M4.5 12a7.5 7.5 0 1 1 15 0 7.5 7.5 0 0 1-15 0Zm7.5-3v3l2 2" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </div>
+              <div class="step-number">02. Enrich</div>
+              <h3 class="step-title">Enrich</h3>
+              <p class="step-copy">
+                Real-time weather, humidity and soil data is pulled for your exact location.
+              </p>
+            </article>
+
+            <article class="step-card" id="docs">
+              <div class="step-icon" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path d="M8 5.5h6l3 3V18.5A1.5 1.5 0 0 1 15.5 20h-7A1.5 1.5 0 0 1 7 18.5v-11A2 2 0 0 1 9 5.5Zm5 0v3h3"
+                    stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </div>
+              <div class="step-number">03. Analyse</div>
+              <h3 class="step-title">Analyse</h3>
+              <p class="step-copy">
+                Detects infections, combines environmental data, and tells you what to do next.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="impact-section" id="impact">
+        <div class="section-inner">
+          <h2 class="section-title">Why This Matters</h2>
+          <div class="card-grid">
+            <article class="step-card">
+              <div class="step-icon" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M12 3v18M7.5 7.5c0-1.9 2-3.5 4.5-3.5s4.5 1.6 4.5 3.5-2 3.5-4.5 3.5-4.5 1.6-4.5 3.5S9.5 18 12 18s4.5-1.6 4.5-3.5"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </div>
+              <div class="step-number">Global Supply</div>
+              <h3 class="step-title impact-value">30%</h3>
+              <p class="step-copy">of global edible oil supply depends on palm oil</p>
+            </article>
+
+            <article class="step-card">
+              <div class="step-icon" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M4 18h16M6.5 15.5V9.8c0-.4.2-.8.5-1.1l4-3.8a1.5 1.5 0 0 1 2.1 0l4 3.8c.3.3.5.7.5 1.1v5.7M9 12h6"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </div>
+              <div class="step-number">Annual Loss</div>
+              <h3 class="step-title impact-value">RM1.5B</h3>
+              <p class="step-copy">lost annually in Malaysia from BSR alone</p>
+            </article>
+
+            <article class="step-card">
+              <div class="step-icon" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M5 18.5c5.5-5.8 8.8-10 10-12.5 2.1 3 3.3 6 4 9.2-4.7.6-9.4 1.7-14 3.3Z"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </div>
+              <div class="step-number">Plantation Impact</div>
+              <h3 class="step-title impact-value">200K</h3>
+              <p class="step-copy">hectares already affected across Malaysian plantations</p>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <div class="footer-links">
+          <a href="#how-it-works">How It Works</a>
+          <a href="#impact">Impact</a>
+          <button type="button" class="footer-link-button" id="contact-trigger">Contact</button>
+        </div>
+        <div class="footer-meta">&copy; 2026 PalmGuard AI</div>
+      </div>
+    </footer>
+
+    <div class="contact-modal-backdrop" id="contact-modal" hidden>
+      <div class="contact-modal" role="dialog" aria-modal="true" aria-labelledby="contact-modal-title">
+        <div class="contact-modal-header">
+          <h2 id="contact-modal-title">Contact</h2>
+          <button type="button" class="contact-modal-close" id="contact-close">Close</button>
+        </div>
+        <div class="contact-modal-body">
+          <p class="contact-modal-item">Email: 225328@student.upm.edu.my</p>
+          <p class="contact-modal-item">Phone: 010-8855813</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="root"></div>
+  <script>
+    const contactModal = document.getElementById('contact-modal')
+    const contactTrigger = document.getElementById('contact-trigger')
+    const contactClose = document.getElementById('contact-close')
+    const contactDialog = contactModal?.querySelector('.contact-modal')
+
+    function goToAnalysis() {
+      window.location.href = 'analysis.html'
+    }
+
+    function openContactModal() {
+      if (contactModal) {
+        contactModal.hidden = false
+      }
+    }
+
+    function closeContactModal() {
+      if (contactModal) {
+        contactModal.hidden = true
+      }
+    }
+
+    contactTrigger?.addEventListener('click', openContactModal)
+    contactClose?.addEventListener('click', closeContactModal)
+    contactModal?.addEventListener('click', closeContactModal)
+    contactDialog?.addEventListener('click', (event) => event.stopPropagation())
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && contactModal && !contactModal.hidden) {
+        closeContactModal()
+      }
+    })
+  </script>
+</body>
+
 </html>

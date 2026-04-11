@@ -1,11 +1,17 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import './App.css'
 
-const root = ReactDOM.createRoot(document.getElementById('root'))
+const params = new URLSearchParams(window.location.search)
+const shouldRenderApp = params.get('view') === 'analysis'
 
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-)
+if (shouldRenderApp) {
+  const root = ReactDOM.createRoot(document.getElementById('root'))
+
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  )
+}
