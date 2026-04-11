@@ -49,9 +49,30 @@ export default function BatchResultsView({
   const effectiveReport =
     reportOverrides[currentResult?.history_id] ?? currentResult?.report
 
+  const scrollToPageTop = () => {
+    const scrollingElement =
+      document.scrollingElement || document.documentElement || document.body
+
+    window.scrollTo(0, 0)
+    document.documentElement.scrollTop = 0
+    document.body.scrollTop = 0
+    scrollingElement.scrollTop = 0
+  }
+
+  const switchResultViewMode = (mode) => {
+    setResultViewMode(mode)
+  }
+
+  useEffect(() => {
+    const rafId = window.requestAnimationFrame(() => {
+      scrollToPageTop()
+    })
+
+    return () => window.cancelAnimationFrame(rafId)
+  }, [resultViewMode])
+
   useEffect(() => {
     setResultViewMode('analysis')
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [currentResult?.history_id])
 
   const goToPage = (page) => {
@@ -66,7 +87,7 @@ export default function BatchResultsView({
         <button
           type="button"
           className={`results-tab ${resultViewMode === 'analysis' ? 'active' : ''}`}
-          onClick={() => setResultViewMode('analysis')}
+          onClick={() => switchResultViewMode('analysis')}
           role="tab"
           aria-selected={resultViewMode === 'analysis'}
         >
@@ -75,7 +96,7 @@ export default function BatchResultsView({
         <button
           type="button"
           className={`results-tab ${resultViewMode === 'report' ? 'active' : ''}`}
-          onClick={() => effectiveReport && setResultViewMode('report')}
+          onClick={() => effectiveReport && switchResultViewMode('report')}
           role="tab"
           aria-selected={resultViewMode === 'report'}
           disabled={!effectiveReport}

@@ -11,12 +11,126 @@ from flask import Blueprint, Response, jsonify, request, stream_with_context
 agent_bp = Blueprint("agent", __name__)
 
 
+def _to_float(value):
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric
+
+
+def _format_percent(value, digits=1):
+    numeric = _to_float(value)
+    if numeric is None:
+        return "N/A"
+    return f"{numeric * 100:.{digits}f}%"
+
+
+def _format_number(value, digits=1, suffix=""):
+    numeric = _to_float(value)
+    if numeric is None:
+        return "N/A"
+    return f"{numeric:.{digits}f}{suffix}"
+
+
+def _extract_recommendations(report):
+    direct = report.get("recommendations") or []
+    area_actions = [
+        (entry or {}).get("action")
+        for entry in (report.get("recommendation_areas") or [])
+        if (entry or {}).get("action")
+    ]
+
+    combined = []
+    for item in [*direct, *area_actions]:
+        if item and item not in combined:
+            combined.append(item)
+    return combined
+
+
+def _build_local_agent_reply(user_message, report, environment, infected_count):
+    summary = report.get("summary") or {}
+    recommendations = _extract_recommendations(report)
+    key_findings = report.get("key_findings") or []
+
+    risk_band = str(summary.get("risk_band") or "unknown").strip()
+    risk_band_lower = risk_band.lower()
+    average_risk_score = _format_percent(summary.get("average_risk_score"))
+    high_risk_cells = int(summary.get("high_risk_cells") or 0)
+    estimated_yield = _format_number(summary.get("estimated_yield_at_risk_tonnes"), 2, " tonnes")
+    avg_humidity = _to_float(environment.get("avg_humidity"))
+    avg_soil = _to_float(environment.get("avg_soil_moisture"))
+    avg_temperature = _to_float(environment.get("avg_temperature"))
+
+    prompt = (user_message or "").strip().lower()
+
+    severity_line = (
+        f"This scan is currently in the {risk_band_lower} risk band with {infected_count} infected tree(s), "
+        f"{high_risk_cells} high-risk zone(s), and an average risk score of {average_risk_score}."
+    )
+    exposure_line = f"Estimated yield at risk is {estimated_yield}."
+
+    if any(token in prompt for token in ["serious", "severity", "infection level", "how bad", "risk level"]):
+        return f"{severity_line} {exposure_line} Immediate treatment priority is justified if infected trees are already visible in the field."
+
+    if any(token in prompt for token in ["priorit", "first", "action", "recommend", "what should i do"]):
+        if recommendations:
+            return f"Top priority from this scan: {recommendations[0]} Secondary priority: {recommendations[1] if len(recommendations) > 1 else 'inspect nearby trees and monitor the surrounding zone closely.'}"
+        return "Top priority from this scan: inspect the infected area first, isolate the nearest affected trees, and monitor adjacent high-risk cells for spread."
+
+    if any(token in prompt for token in ["humidity", "soil", "moisture", "temperature", "weather", "environment"]):
+        env_parts = []
+        if avg_humidity is not None:
+            env_parts.append(f"humidity is {_format_number(avg_humidity, 1, '%')}")
+        if avg_soil is not None:
+            env_parts.append(f"soil moisture is {_format_number(avg_soil, 3)}")
+        if avg_temperature is not None:
+            env_parts.append(f"temperature is {_format_number(avg_temperature, 1, 'C')}")
+
+        conditions = ", ".join(env_parts) if env_parts else "environmental readings are limited"
+        spread_hint = []
+        if avg_humidity is not None and avg_humidity >= 75:
+            spread_hint.append("humidity is supportive of disease activity")
+        if avg_soil is not None and avg_soil >= 0.2:
+            spread_hint.append("soil moisture may help fungal persistence")
+        if avg_temperature is not None and avg_temperature >= 27:
+            spread_hint.append("warm temperature may accelerate spread")
+
+        if spread_hint:
+            return f"For this scan, {conditions}. Based on those readings, {', '.join(spread_hint)}."
+        return f"For this scan, {conditions}. These readings are not the strongest spread accelerators right now, but the infected zones should still be monitored."
+
+    if any(token in prompt for token in ["spread", "spreading", "why fast", "why is this area"]):
+        drivers = []
+        if infected_count > 0:
+            drivers.append(f"{infected_count} infected tree(s) were already detected")
+        if avg_humidity is not None and avg_humidity >= 75:
+            drivers.append(f"humidity is elevated at {_format_number(avg_humidity, 1, '%')}")
+        if avg_soil is not None and avg_soil >= 0.2:
+            drivers.append(f"soil moisture is high at {_format_number(avg_soil, 3)}")
+        if high_risk_cells > 0:
+            drivers.append(f"{high_risk_cells} high-risk zone(s) were identified")
+
+        if drivers:
+            return f"This area is being flagged because {', '.join(drivers)}. Together, those signals suggest the infection could persist or expand without quick intervention."
+        return "This area is being flagged because the scan detected enough risk signals to justify close monitoring, even though no single factor is extreme on its own."
+
+    if key_findings:
+        findings_text = " ".join(str(item) for item in key_findings[:2])
+        return f"{severity_line} {findings_text}"
+
+    return f"{severity_line} {exposure_line} Ask about severity, environmental drivers, or priority actions and I will answer from this scan."
+
+
 def get_gemini_model():
     if genai is None:
         raise RuntimeError(
             "google-generativeai is not installed. Run `python -m pip install -r requirements.txt` in the backend directory."
         )
-    genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is not configured for the backend.")
+    genai.configure(api_key=api_key)
     return genai.GenerativeModel("gemini-1.5-flash")
 
 
@@ -33,9 +147,9 @@ def agent_chat():
 
     summary = report.get("summary") or {}
     key_findings = report.get("key_findings") or []
-    recommendations = report.get("recommendations") or []
+    recommendations = _extract_recommendations(report)
 
-    system_prompt = f"""You are PalmSentinel, an expert AI agent specialising in palm oil Basal Stem Rot (BSR) disease analysis for Malaysian plantations. You have autonomously completed a full drone image analysis.
+    system_prompt = f"""You are PalmGuard AI, an expert AI agent specialising in palm oil Basal Stem Rot (BSR) disease analysis for Malaysian plantations. You have autonomously completed a full drone image analysis.
 
 CURRENT SCAN DATA:
 - Infected trees detected: {infected_count}
@@ -59,9 +173,21 @@ INSTRUCTIONS:
     try:
         model = get_gemini_model()
         response = model.generate_content(f"{system_prompt}\n\nUser: {user_message}")
-        return jsonify({"reply": response.text})
+        reply_text = getattr(response, "text", None)
+        if reply_text and reply_text.strip():
+            return jsonify({"reply": reply_text.strip()})
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        return jsonify({
+            "reply": _build_local_agent_reply(user_message, report, environment, infected_count),
+            "fallback": True,
+            "warning": str(exc),
+        })
+
+    return jsonify({
+        "reply": _build_local_agent_reply(user_message, report, environment, infected_count),
+        "fallback": True,
+        "warning": "The language model returned an empty response.",
+    })
 
 
 @agent_bp.route("/agent-stream", methods=["POST"])

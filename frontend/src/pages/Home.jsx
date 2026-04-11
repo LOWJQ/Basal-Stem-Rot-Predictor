@@ -426,7 +426,18 @@ export default function Home() {
 
     try {
       setHistoryActionLoadingId(deleteTarget.id)
-      await Promise.all(deleteTarget.scanIds.map((scanId) => deleteHistoryScan(scanId)))
+      const deleteResults = await Promise.allSettled(
+        deleteTarget.scanIds.map((scanId) => deleteHistoryScan(scanId))
+      )
+
+      const blockingFailure = deleteResults.find((result) => (
+        result.status === 'rejected' &&
+        !String(result.reason?.message || '').includes('not found')
+      ))
+
+      if (blockingFailure?.status === 'rejected') {
+        throw blockingFailure.reason
+      }
 
       writeStoredHistoryBatches(
         readStoredHistoryBatches().filter((batch) => batch.id !== deleteTarget.id)
@@ -466,7 +477,7 @@ export default function Home() {
         <section className="dashboard-page dashboard-state-page">
           <div className="dashboard-page-header">
             <p className="dashboard-page-label">Autonomous analysis</p>
-            <h1 className="dashboard-page-title">PalmSentinel is preparing the field overview</h1>
+            <h1 className="dashboard-page-title">PalmGuard AI is preparing the field overview</h1>
             <p className="dashboard-page-description">
               The agent is validating detections, environmental conditions, and spread projections
               before opening the full dashboard.
@@ -534,7 +545,7 @@ export default function Home() {
           <div className="sidebar-app-brand">
             <p className="sidebar-app-kicker">Palm oil disease analytics</p>
             <div className="sidebar-app-name">PalmGuard AI</div>
-            <p className="sidebar-app-caption">PalmSentinel workspace</p>
+            <p className="sidebar-app-caption">PalmGuard AI workspace</p>
           </div>
 
           <button className="sidebar-new button-dark" type="button" onClick={resetToNewAnalysis}>

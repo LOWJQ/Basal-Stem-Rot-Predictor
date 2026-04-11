@@ -2,11 +2,15 @@ import logging
 import os
 import threading
 
+from dotenv import load_dotenv
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
+
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS

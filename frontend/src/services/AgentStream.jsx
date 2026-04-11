@@ -67,7 +67,7 @@ export default function AgentStream({ analysisData, onComplete }) {
     <div className="agent-stream-wrap">
       <div className="agent-stream-header">
         <div className={`agent-stream-indicator${done ? ' done' : ''}`} />
-        <span className="agent-stream-title">PalmSentinel Agent - Autonomous Analysis</span>
+        <span className="agent-stream-title">PalmGuard AI Agent - Autonomous Analysis</span>
       </div>
 
       <div className="agent-stream-steps">

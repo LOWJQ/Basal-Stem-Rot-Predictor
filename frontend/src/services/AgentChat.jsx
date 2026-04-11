@@ -18,7 +18,7 @@ const SUGGESTED = [
 function AgentMessage({ text }) {
   return (
     <div className="agent-chat-msg-agent">
-      <div className="agent-chat-msg-label">PalmSentinel</div>
+      <div className="agent-chat-msg-label">PalmGuard AI</div>
       <div className="agent-chat-bubble-agent">{text}</div>
     </div>
   )
@@ -67,9 +67,19 @@ export default function AgentChat({ result }) {
         }),
       })
       const data = await res.json()
-      setMessages((prev) => [...prev, { role: 'agent', text: data.reply ?? 'No response received.' }])
-    } catch {
-      setMessages((prev) => [...prev, { role: 'agent', text: 'Unable to reach the agent. Please check your connection and try again.' }])
+      if (!res.ok) {
+        throw new Error(data?.error || data?.warning || 'Unable to get a response from PalmGuard AI.')
+      }
+
+      setMessages((prev) => [...prev, {
+        role: 'agent',
+        text: data?.reply || data?.warning || 'No response received.',
+      }])
+    } catch (error) {
+      setMessages((prev) => [...prev, {
+        role: 'agent',
+        text: error?.message || 'Unable to reach the agent. Please check your connection and try again.',
+      }])
     } finally {
       setLoading(false)
     }
@@ -79,7 +89,7 @@ export default function AgentChat({ result }) {
     <div className="agent-chat-wrap">
       <div className="agent-chat-header">
         <div className="agent-chat-dot" />
-        <span className="agent-chat-title">PalmSentinel Agent</span>
+        <span className="agent-chat-title">PalmGuard AI Agent</span>
         <span className="agent-chat-subtitle">Context-aware - this scan only</span>
       </div>
 
