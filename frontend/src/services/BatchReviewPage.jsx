@@ -67,6 +67,9 @@ export default function BatchReviewPage({
     (entry) => isComplete(entry) && visibleProgress[entry.id] !== 'done'
   )
   const canAnalyzeAll = pendingAnalyzeEntries.length > 0
+  const progressPercent = progress?.total
+    ? Math.min(100, Math.round((progress.current / progress.total) * 100))
+    : 0
 
   const buildFormData = (entry) => {
     const formData = new FormData()
@@ -89,27 +92,36 @@ export default function BatchReviewPage({
     return (
       <div className="batch-review-empty">
         <p>No images to review.</p>
-        <button className="composer-submit" onClick={onBack}>Go back</button>
+        <button className="button-primary composer-submit" onClick={onBack}>Go back</button>
       </div>
     )
   }
 
   return (
     <motion.div
-      className="batch-review-page"
+      className="batch-review-page dashboard-page"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
     >
+      <div className="dashboard-page-header">
+        <p className="dashboard-page-label">Review Images</p>
+        <h1 className="dashboard-page-title">Complete the scan details before analysis</h1>
+        <p className="dashboard-page-description">
+          Confirm extracted coordinates, fill in anything missing, and launch the full batch once
+          each image is ready.
+        </p>
+      </div>
+
       <div className="batch-review-header">
         <div className="batch-review-header-left">
-          <button className="batch-back-btn" onClick={onBack} disabled={isLoading}>
-            ← Back
+          <button className="button-secondary batch-back-btn" onClick={onBack} disabled={isLoading}>
+            Back
           </button>
           <div>
             <h2 className="batch-review-title">Review images</h2>
             <p className="batch-review-subtitle">
               {entries.length} image{entries.length !== 1 ? 's' : ''} selected
-              {' · '}
+              {' | '}
               <span className={completeCount === 0 ? 'batch-count-warn' : 'batch-count-ok'}>
                 {completeCount} with complete location
               </span>
@@ -128,7 +140,7 @@ export default function BatchReviewPage({
           <div className="batch-review-actions">
             <button
               type="button"
-              className="batch-add-images-btn"
+              className="button-secondary batch-add-images-btn"
               onClick={openFilePicker}
               disabled={isLoading || isAddingImages}
             >
@@ -137,7 +149,7 @@ export default function BatchReviewPage({
             </button>
 
             <button
-              className="composer-submit batch-analyze-all-btn"
+              className="button-primary composer-submit batch-analyze-all-btn"
               onClick={handleAnalyzeAll}
               disabled={!canAnalyzeAll || isLoading || isAddingImages}
             >
@@ -156,6 +168,24 @@ export default function BatchReviewPage({
           />
         </div>
       </div>
+
+      {progress ? (
+        <div className={`batch-progress-banner status-${progress.status || 'running'}`}>
+          <div className="batch-progress-copy">
+            <strong>{progress.currentLabel || 'Preparing analysis'}</strong>
+            <span>
+              {progress.current}/{progress.total} image{progress.total === 1 ? '' : 's'} processed
+            </span>
+          </div>
+
+          <div className="batch-progress-meta">
+            <span>{progressPercent}%</span>
+            <div className="progress-bar-wrap">
+              <div className="progress-bar-fill" style={{ width: `${progressPercent}%` }} />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {error ? <p className="error-message">{error}</p> : null}
 

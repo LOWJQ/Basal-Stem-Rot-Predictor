@@ -61,27 +61,28 @@ export default function BatchResultsView({
   }
 
   return (
-    <div className="batch-results-page">
-      {effectiveReport ? (
-        <div className="batch-results-toggle-wrap">
-          <div className="result-view-toggle">
-            <button
-              type="button"
-              className={`result-view-toggle-button ${resultViewMode === 'analysis' ? 'active' : ''}`}
-              onClick={() => setResultViewMode('analysis')}
-            >
-              Analysis View
-            </button>
-            <button
-              type="button"
-              className={`result-view-toggle-button ${resultViewMode === 'report' ? 'active' : ''}`}
-              onClick={() => setResultViewMode('report')}
-            >
-              Report Preview
-            </button>
-          </div>
-        </div>
-      ) : null}
+    <div className="batch-results-page dashboard-page">
+      <div className="results-tabbar" role="tablist" aria-label="Result views">
+        <button
+          type="button"
+          className={`results-tab ${resultViewMode === 'analysis' ? 'active' : ''}`}
+          onClick={() => setResultViewMode('analysis')}
+          role="tab"
+          aria-selected={resultViewMode === 'analysis'}
+        >
+          Analysis View
+        </button>
+        <button
+          type="button"
+          className={`results-tab ${resultViewMode === 'report' ? 'active' : ''}`}
+          onClick={() => effectiveReport && setResultViewMode('report')}
+          role="tab"
+          aria-selected={resultViewMode === 'report'}
+          disabled={!effectiveReport}
+        >
+          Report Preview
+        </button>
+      </div>
 
       {resultViewMode === 'report' && effectiveReport
         ? <ReportPreviewView report={effectiveReport} historyId={currentResult.history_id} />

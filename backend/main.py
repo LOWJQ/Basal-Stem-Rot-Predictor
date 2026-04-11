@@ -14,6 +14,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from routes.predict import predict_bp
 from routes.health import health_bp
 from routes.history import history_bp
+from routes.agent import agent_bp
 from services.database import init_db
 from services.image_processing import get_model
 
@@ -51,6 +52,7 @@ def create_app():
     app.register_blueprint(predict_bp)
     app.register_blueprint(health_bp)
     app.register_blueprint(history_bp)
+    app.register_blueprint(agent_bp)
 
     @app.route("/outputs/<path:filename>")
     def serve_outputs(filename):
@@ -90,4 +92,3 @@ if __name__ == "__main__":
         debug=False,
         threaded=True,
     )
-

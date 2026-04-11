@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react'
 import { Upload, Images } from 'lucide-react'
-import { motion } from 'framer-motion'
 import { buildImageEntries } from './imageEntryUtils'
 
 export default function UploadSection({ onReview, isLoading, error }) {
@@ -17,34 +16,37 @@ export default function UploadSection({ onReview, isLoading, error }) {
 
   const processFiles = async (fileList) => {
     setExtracting(true)
-
     const entries = await buildImageEntries(fileList)
-
     setExtracting(false)
 
     if (entries.length === 0) return
     onReview(entries)
   }
 
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files.length > 0) {
-      processFiles(e.target.files)
+  const handleFileChange = (event) => {
+    if (event.target.files && event.target.files.length > 0) {
+      processFiles(event.target.files)
     }
   }
 
-  const handleDrag = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true)
-    else if (e.type === 'dragleave') setDragActive(false)
+  const handleDrag = (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (event.type === 'dragenter' || event.type === 'dragover') {
+      setDragActive(true)
+    } else if (event.type === 'dragleave') {
+      setDragActive(false)
+    }
   }
 
-  const handleDrop = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
+  const handleDrop = (event) => {
+    event.preventDefault()
+    event.stopPropagation()
     setDragActive(false)
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFiles(e.dataTransfer.files)
+
+    if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+      processFiles(event.dataTransfer.files)
     }
   }
 
@@ -52,11 +54,7 @@ export default function UploadSection({ onReview, isLoading, error }) {
 
   return (
     <div className="upload-container">
-      <motion.div
-        className="composer-card"
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
+      <div className="upload-shell">
         <div
           className={`composer-dropzone ${dragActive ? 'active' : ''} ${busy ? 'disabled' : ''}`}
           onDragEnter={handleDrag}
@@ -64,7 +62,6 @@ export default function UploadSection({ onReview, isLoading, error }) {
           onDragOver={handleDrag}
           onDrop={handleDrop}
           onClick={busy ? undefined : openFilePicker}
-          style={{ cursor: busy ? 'not-allowed' : 'pointer' }}
         >
           <div className="composer-placeholder">
             {extracting ? (
@@ -74,14 +71,12 @@ export default function UploadSection({ onReview, isLoading, error }) {
               </>
             ) : (
               <>
-                <Upload size={22} className="upload-icon" />
+                <Upload size={26} className="upload-icon" />
                 <div className="upload-text-block">
-                  <span className="composer-main-text">
-                    Drop images here or click to upload
-                  </span>
+                  <span className="composer-main-text">Drop images here or click to upload</span>
                   <span className="upload-hint">
                     <Images size={12} />
-                    Multiple images supported · JPEG or PNG · GPS extracted automatically
+                    Multiple images supported - JPEG or PNG - GPS extracted automatically
                   </span>
                 </div>
               </>
@@ -98,17 +93,17 @@ export default function UploadSection({ onReview, isLoading, error }) {
           />
         </div>
 
-        <div style={{ textAlign: 'center', marginTop: '12px' }}>
-
-          <a href="https://drive.google.com/uc?export=download&id=1gj41lPXMzr0JjqIXjFu1Fnt7rxXVNgCt"
-            style={{ fontSize: '15px', color: '#666', textDecoration: 'underline', cursor: 'pointer' }}
+        <div className="upload-sample-link-wrap">
+          <a
+            className="upload-sample-link"
+            href="https://drive.google.com/uc?export=download&id=1gj41lPXMzr0JjqIXjFu1Fnt7rxXVNgCt"
           >
-            Don't have a drone image? Download a sample to try
+            Don&apos;t have a drone image? Download a sample to try
           </a>
         </div>
 
-        {error && <div className="error-message">{error}</div>}
-      </motion.div>
+        {error ? <div className="error-message">{error}</div> : null}
+      </div>
     </div>
   )
 }

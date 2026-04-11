@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
   LoaderCircle,
-  Menu,
   MessageSquare,
   MoreHorizontal,
   Settings,
@@ -10,6 +9,7 @@ import {
 import UploadSection from '../services/UploadSection'
 import BatchReviewPage from '../services/BatchReviewPage'
 import BatchResultsView from '../services/BatchResultsView'
+import AgentStream from '../services/AgentStream'
 import {
   deleteAllHistoryScans,
   deleteHistoryScan,
@@ -148,9 +148,10 @@ export default function Home() {
   const [openMenuId, setOpenMenuId] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState(false)
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [reviewItems, setReviewItems] = useState(null)
   const [batchResults, setBatchResults] = useState(null)
+  const [agentStreamData, setAgentStreamData] = useState(null)
+  const [showAgentStream, setShowAgentStream] = useState(false)
   const [selectedBatchHistoryId, setSelectedBatchHistoryId] = useState(null)
   const [selectedHistoryGroupId, setSelectedHistoryGroupId] = useState(null)
   const [batchProgress, setBatchProgress] = useState(null)
@@ -179,17 +180,6 @@ export default function Home() {
     const handleWindowClick = () => setOpenMenuId(null)
     window.addEventListener('click', handleWindowClick)
     return () => window.removeEventListener('click', handleWindowClick)
-  }, [])
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth > 900) {
-        setIsMobileSidebarOpen(false)
-      }
-    }
-
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   const loadBatchHistory = async (groupId = null, preferredHistoryId = null) => {
@@ -260,6 +250,8 @@ export default function Home() {
 
   const resetToNewAnalysis = () => {
     setBatchResults(null)
+    setAgentStreamData(null)
+    setShowAgentStream(false)
     setSelectedBatchHistoryId(null)
     setSelectedHistoryGroupId(null)
     setReviewItems(null)
@@ -269,7 +261,6 @@ export default function Home() {
     setBatchProgress(null)
     setBatchItemProgress({})
     setOpenMenuId(null)
-    setIsMobileSidebarOpen(false)
   }
 
   const runScan = async (formData) => {
@@ -346,6 +337,10 @@ export default function Home() {
 
       if (!failedResults.length) {
         setReviewItems(null)
+        if (successfulResults.length > 0) {
+          setAgentStreamData(successfulResults[0])
+          setShowAgentStream(true)
+        }
         setBatchResults(successfulResults)
         setSelectedBatchHistoryId(successfulResults[0]?.history_id ?? null)
         setBatchProgress({
@@ -385,7 +380,6 @@ export default function Home() {
       setBatchProgress(null)
 
       await loadBatchHistory(groupId, preferredHistoryId)
-      setIsMobileSidebarOpen(false)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -458,10 +452,32 @@ export default function Home() {
   const renderMainContent = () => {
     if (isOpeningHistory) {
       return (
-        <div className="history-loading-panel">
-          <LoaderCircle className="history-loading-icon" />
-          <p>Opening saved analysis...</p>
-        </div>
+        <section className="dashboard-page dashboard-state-page">
+          <div className="dashboard-state-panel">
+            <LoaderCircle className="history-loading-icon" />
+            <p>Opening saved analysis...</p>
+          </div>
+        </section>
+      )
+    }
+
+    if (showAgentStream && agentStreamData) {
+      return (
+        <section className="dashboard-page dashboard-state-page">
+          <div className="dashboard-page-header">
+            <p className="dashboard-page-label">Autonomous analysis</p>
+            <h1 className="dashboard-page-title">PalmSentinel is preparing the field overview</h1>
+            <p className="dashboard-page-description">
+              The agent is validating detections, environmental conditions, and spread projections
+              before opening the full dashboard.
+            </p>
+          </div>
+
+          <AgentStream
+            analysisData={agentStreamData}
+            onComplete={() => setShowAgentStream(false)}
+          />
+        </section>
       )
     }
 
@@ -490,38 +506,43 @@ export default function Home() {
     }
 
     return (
-      <>
-        <p className="hero-kicker">Palm oil disease analysis</p>
-        <h1 className="hero-title">From detection to decision in one scan</h1>
-        <p className="hero-subtitle">
-          <span>Upload images to generate a risk map.</span>
-          <span>GPS coordinates are read automatically from image EXIF data.</span>
-        </p>
-        <div className="hero-trust-row">
-          <span className="hero-trust-pill">AI-powered prediction</span>
-          <span className="hero-trust-text">
-            YOLO-V8-based infected tree detection combined with live environmental data
-          </span>
+      <section className="dashboard-page upload-page">
+        <div className="dashboard-page-header">
+          <p className="dashboard-page-label">Palm Oil Disease Analysis</p>
+          <h1 className="dashboard-page-title">From detection to decision in one scan</h1>
+          <div className="upload-page-badge-row">
+            <span className="upload-page-badge">AI-powered prediction</span>
+            <span className="upload-page-badge-text">
+              YOLO-V8-based infected tree detection combined with live environmental data
+            </span>
+          </div>
         </div>
+
         <UploadSection
           onReview={setReviewItems}
           isLoading={isLoading}
           error={error}
         />
-      </>
+      </section>
     )
   }
 
   return (
-    <div className="app-layout">
-      <aside className={`sidebar ${isMobileSidebarOpen ? 'mobile-open' : ''}`}>
+    <div className="analysis-shell">
+      <aside className="sidebar">
         <div className="sidebar-top">
-          <button className="sidebar-new" onClick={resetToNewAnalysis}>
-            <span>New analysis</span>
+          <div className="sidebar-app-brand">
+            <p className="sidebar-app-kicker">Palm oil disease analytics</p>
+            <div className="sidebar-app-name">PalmGuard AI</div>
+            <p className="sidebar-app-caption">PalmSentinel workspace</p>
+          </div>
+
+          <button className="sidebar-new button-dark" type="button" onClick={resetToNewAnalysis}>
+            <span>New Analysis</span>
           </button>
 
           <div className="sidebar-section">
-            <div className="sidebar-label">Recent</div>
+            <div className="sidebar-label">RECENT</div>
 
             <div className="sidebar-list">
               {isHistoryLoading ? (
@@ -530,7 +551,7 @@ export default function Home() {
                 historyGroups.map((group) => (
                   <div
                     key={group.id}
-                    className={`sidebar-history-row combined ${selectedHistoryGroupId === group.id ? 'active' : ''} ${openMenuId === group.id ? 'menu-open' : ''}`}
+                    className={`sidebar-history-row ${selectedHistoryGroupId === group.id ? 'active' : ''} ${openMenuId === group.id ? 'menu-open' : ''}`}
                   >
                     <button
                       className={`sidebar-item sidebar-item-main ${selectedHistoryGroupId === group.id ? 'active' : ''}`}
@@ -544,7 +565,7 @@ export default function Home() {
                     <div className="sidebar-item-actions">
                       <button
                         type="button"
-                        className="sidebar-icon-button menu-trigger"
+                        className="sidebar-icon-button"
                         onClick={(e) => handleToggleMenu(e, group.id)}
                         disabled={historyActionLoadingId === group.id}
                       >
@@ -590,34 +611,9 @@ export default function Home() {
         </div>
       </aside>
 
-      {isMobileSidebarOpen ? (
-        <button
-          type="button"
-          className="sidebar-mobile-backdrop"
-          aria-label="Close sidebar"
-          onClick={() => setIsMobileSidebarOpen(false)}
-        />
-      ) : null}
-
-      <div className="main-panel">
-        <header className="topbar">
-          <button
-            type="button"
-            className="mobile-sidebar-toggle"
-            onClick={() => setIsMobileSidebarOpen(true)}
-            aria-label="Open sidebar"
-          >
-            <Menu size={18} />
-          </button>
-          <div className="brand">PalmGuard AI</div>
-        </header>
-
-        <main className="hero-layout">
-          <div className="hero-content">
-            {renderMainContent()}
-          </div>
-        </main>
-      </div>
+      <main className="dashboard-main">
+        {renderMainContent()}
+      </main>
 
       {isSettingsOpen ? (
         <div className="settings-modal-backdrop" onClick={() => setIsSettingsOpen(false)}>
@@ -629,7 +625,7 @@ export default function Home() {
               <h2>Settings</h2>
               <button
                 type="button"
-                className="settings-close-button"
+                className="settings-close-button button-secondary"
                 onClick={() => setIsSettingsOpen(false)}
               >
                 Close
@@ -673,7 +669,7 @@ export default function Home() {
             <div className="delete-modal-actions">
               <button
                 type="button"
-                className="delete-cancel-button"
+                className="delete-cancel-button button-secondary"
                 onClick={() => setDeleteTarget(null)}
                 disabled={historyActionLoadingId === deleteTarget.id}
               >
@@ -682,7 +678,7 @@ export default function Home() {
 
               <button
                 type="button"
-                className="delete-confirm-button"
+                className="delete-confirm-button button-dark"
                 onClick={handleConfirmDeleteHistoryGroup}
                 disabled={historyActionLoadingId === deleteTarget.id}
               >
@@ -709,7 +705,7 @@ export default function Home() {
             <div className="delete-modal-actions">
               <button
                 type="button"
-                className="delete-cancel-button"
+                className="delete-cancel-button button-secondary"
                 onClick={() => setIsDeleteAllConfirmOpen(false)}
                 disabled={isDeletingAllHistory}
               >
@@ -718,7 +714,7 @@ export default function Home() {
 
               <button
                 type="button"
-                className="delete-confirm-button"
+                className="delete-confirm-button button-dark"
                 onClick={handleDeleteAllHistory}
                 disabled={isDeletingAllHistory}
               >

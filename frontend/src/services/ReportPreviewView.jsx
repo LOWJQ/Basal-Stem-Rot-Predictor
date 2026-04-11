@@ -39,15 +39,17 @@ export default function ReportPreviewView({ report, historyId }) {
 
   return (
     <div className="results-page report-preview-page">
-      <div className="results-header">
-        <h1 className="results-title">Report Preview</h1>
+      <section className="results-page-intro">
+        <p className="results-page-label">Report preview</p>
+        <h1 className="results-title">Structured report output</h1>
         <p className="results-subtitle">
-          This is the structured report payload that will be used for PDF export.
+          Review the report payload that is available for PDF and Excel export.
         </p>
+
         {historyId ? (
           <div className="report-preview-actions">
             <a
-              className="report-preview-download report-preview-download-secondary"
+              className="report-preview-download button-secondary"
               href={getHistoryReportPdfUrl(historyId)}
               target="_blank"
               rel="noreferrer"
@@ -55,7 +57,7 @@ export default function ReportPreviewView({ report, historyId }) {
               Download PDF
             </a>
             <a
-              className="report-preview-download report-preview-download-secondary"
+              className="report-preview-download button-secondary"
               href={getHistoryReportExcelUrl(historyId)}
               target="_blank"
               rel="noreferrer"
@@ -64,7 +66,7 @@ export default function ReportPreviewView({ report, historyId }) {
             </a>
           </div>
         ) : null}
-      </div>
+      </section>
 
       <div className="report-preview-grid">
         <section className="report-preview-card">
@@ -102,7 +104,7 @@ export default function ReportPreviewView({ report, historyId }) {
         <section className="report-preview-card">
           <h3>Environment</h3>
           <ul className="report-preview-list">
-            <li><strong>Avg temperature:</strong> {formatValue(summary.average_temperature)} °C</li>
+            <li><strong>Avg temperature:</strong> {formatValue(summary.average_temperature)} C</li>
             <li><strong>Avg humidity:</strong> {formatValue(summary.average_humidity)} %</li>
             <li><strong>Avg soil moisture:</strong> {formatValue(summary.average_soil_moisture, 3)}</li>
           </ul>

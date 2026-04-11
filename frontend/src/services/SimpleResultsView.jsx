@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchHistorySimulationFrames, fetchHistoryReport } from './api'
+import AgentChat from './AgentChat'
 
 function formatRiskHeading(risk) {
   if (!risk) return ['RISK AREA', 'SELECTED']
-  if (risk === 'high') return ['HIGH RISK -', 'IMMEDIATE ACTION']
-  if (risk === 'medium') return ['MEDIUM RISK -', 'PREVENTIVE ACTION']
-  return ['LOW RISK -', 'MONITORING ADVISED']
+  if (risk === 'high') return ['HIGH RISK', 'IMMEDIATE ACTION']
+  if (risk === 'medium') return ['MEDIUM RISK', 'PREVENTIVE ACTION']
+  return ['LOW RISK', 'MONITORING ADVISED']
 }
 
 function getRiskAdvisory(risk) {
@@ -120,9 +121,9 @@ function buildRiskNarrative(cell, infectedPoints, imageSize) {
 
   if (Number.isFinite(temperature)) {
     if (temperature >= 27) {
-      points.push(`Warm temperature (${formatMetric(temperature)}°C) may accelerate pathogen activity.`)
+      points.push(`Warm temperature (${formatMetric(temperature)}C) may accelerate pathogen activity.`)
     } else if (temperature >= 24) {
-      points.push(`Moderate temperature (${formatMetric(temperature)}°C) can still support disease activity.`)
+      points.push(`Moderate temperature (${formatMetric(temperature)}C) can still support disease activity.`)
     }
   }
 
@@ -191,7 +192,7 @@ function buildContextActions(cell) {
   }
 
   if (Number.isFinite(temperature) && temperature >= 27) {
-    actions.push(`Prioritize this warm zone (${formatMetric(temperature)}°C) for urgent treatment.`)
+    actions.push(`Prioritize this warm zone (${formatMetric(temperature)}C) for urgent treatment.`)
   }
 
   return actions.slice(0, 3)
@@ -255,25 +256,6 @@ function getMetricSignal(metric, value) {
   }
 
   return { tone: 'neutral', status: 'Unknown', helper: 'No interpretation available' }
-}
-
-function getDetectionConfidenceSummary(points) {
-  if (!Array.isArray(points) || !points.length) {
-    return null
-  }
-
-  const validConfidences = points
-    .map((point) => Number(point.conf))
-    .filter((value) => Number.isFinite(value))
-
-  if (!validConfidences.length) {
-    return null
-  }
-
-  const averageConfidence =
-    validConfidences.reduce((sum, value) => sum + value, 0) / validConfidences.length
-
-  return `${(averageConfidence * 100).toFixed(1)}% average confidence`
 }
 
 function getDetectionConfidenceValue(points) {
@@ -378,9 +360,12 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
         : 1
     )
   )
-
   const [localReport, setLocalReport] = useState(result?.report ?? null)
 
+  const infectedCount = result?.infected_points?.length ?? 0
+  const highRiskCount = Array.isArray(result?.heatmap)
+    ? result.heatmap.filter((cell) => cell.risk === 'high').length
+    : 0
   const simulationFrames = resolvedSimulationFrames.length
     ? resolvedSimulationFrames
     : (result?.output_image ? [result.output_image] : [])
@@ -390,16 +375,84 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
   const riskHeadingLines = formatRiskHeading(selectedCell?.risk)
   const visibleActions = buildContextActions(selectedCell)
 
-  const infectedSignal = getMetricSignal('infected', result.infected_points.length)
+  const infectedSignal = getMetricSignal('infected', infectedCount)
   const temperatureSignal = getMetricSignal('temperature', result.environment_summary.avg_temperature)
   const humiditySignal = getMetricSignal('humidity', result.environment_summary.avg_humidity)
   const soilSignal = getMetricSignal('soil', result.environment_summary.avg_soil_moisture)
-  const detectionConfidenceSummary = getDetectionConfidenceSummary(result.infected_points)
   const detectionConfidenceRange = getDetectionConfidenceRange(result.infected_points)
   const executiveSummary = buildExecutiveSummary(result)
   const estimatedYieldAtRisk = localReport?.summary?.estimated_yield_at_risk_tonnes
   const yieldRiskAssumptions = localReport?.summary?.yield_risk_assumptions
   const yieldRiskSignal = getYieldAtRiskSignal(estimatedYieldAtRisk)
+  const summaryTone = infectedCount > 0 ? 'danger' : highRiskCount > 0 ? 'warning' : 'neutral'
+  const summaryAction = infectedCount > 0
+    ? 'Recommended action: dispatch immediate field inspection and isolate the highest-risk zones first.'
+    : highRiskCount > 0
+      ? 'Recommended action: prioritize scouting and preventive treatment in the highlighted zones.'
+      : 'Recommended action: continue routine monitoring and schedule the next scan normally.'
+
+  const metricCards = [
+    {
+      key: 'infected',
+      label: 'Infected Trees',
+      status: infectedSignal.status,
+      tone: infectedSignal.tone,
+      value: infectedCount,
+      description: infectedSignal.helper,
+    },
+    {
+      key: 'yield',
+      label: 'Estimated Yield at Risk',
+      status: yieldRiskSignal.status,
+      tone: yieldRiskSignal.tone,
+      value: Number.isFinite(Number(estimatedYieldAtRisk))
+        ? `${Number(estimatedYieldAtRisk).toFixed(2)} tons`
+        : 'N/A',
+      description: yieldRiskAssumptions
+        ? `Estimate uses ${yieldRiskAssumptions.cpo_tonnes_per_infected_tree} tons/tree and ${(yieldRiskAssumptions.loss_factor * 100).toFixed(0)}% loss.`
+        : yieldRiskSignal.helper,
+    },
+    {
+      key: 'confidence',
+      label: 'Avg Detection Confidence',
+      status: 'YOLO-V8 model',
+      tone: 'neutral',
+      value: getDetectionConfidenceValue(result.infected_points),
+      description: detectionConfidenceRange
+        ? `${detectionConfidenceRange} confidence range`
+        : 'No infected trees detected in this scan.',
+    },
+    {
+      key: 'temperature',
+      label: 'Avg Temperature',
+      status: temperatureSignal.status,
+      tone: temperatureSignal.tone,
+      value: Number.isFinite(Number(result.environment_summary.avg_temperature))
+        ? `${result.environment_summary.avg_temperature} C`
+        : 'N/A',
+      description: temperatureSignal.helper,
+    },
+    {
+      key: 'humidity',
+      label: 'Avg Humidity',
+      status: humiditySignal.status,
+      tone: humiditySignal.tone,
+      value: Number.isFinite(Number(result.environment_summary.avg_humidity))
+        ? `${result.environment_summary.avg_humidity}%`
+        : 'N/A',
+      description: humiditySignal.helper,
+    },
+    {
+      key: 'soil',
+      label: 'Avg Soil Moisture',
+      status: soilSignal.status,
+      tone: soilSignal.tone,
+      value: Number.isFinite(Number(result.environment_summary.avg_soil_moisture))
+        ? result.environment_summary.avg_soil_moisture
+        : 'N/A',
+      description: soilSignal.helper,
+    },
+  ]
 
   const handleSelectCell = (cell) => {
     setSelectedCell(cell)
@@ -521,280 +574,253 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
 
   return (
     <div className="results-page">
-      <div className="results-header">
+      <section className="results-page-intro">
+        <p className="results-page-label">Analysis dashboard</p>
         <h1 className="results-title">Field Risk Overview</h1>
         <p className="results-subtitle">
-          Review the detected infections and inspect any area on the heatmap.
+          Review the detected infections, environmental signals, and recommended actions for this
+          scan.
         </p>
-        <p className="results-executive-summary">{executiveSummary}</p>
-      </div>
+      </section>
 
-      <div className="results-summary-stack">
-        <div className="results-summary-grid results-summary-grid-detection">
-          <div className={`results-stat tone-${infectedSignal.tone}`}>
-            <div className="results-stat-topline">
-              <span className="results-stat-label">Infected trees</span>
-              <span className={`results-stat-badge tone-${infectedSignal.tone}`}>{infectedSignal.status}</span>
-            </div>
-            <span className="results-stat-value">{result.infected_points.length}</span>
-            <span className="results-stat-helper">{infectedSignal.helper}</span>
-          </div>
-
-          <div className={`results-stat tone-${yieldRiskSignal.tone}`}>
-            <div className="results-stat-topline">
-              <span className="results-stat-label">Estimated yield at risk</span>
-              <span className={`results-stat-badge tone-${yieldRiskSignal.tone}`}>{yieldRiskSignal.status}</span>
-            </div>
-            <span className="results-stat-value">
-              {Number.isFinite(Number(estimatedYieldAtRisk)) ? `${Number(estimatedYieldAtRisk).toFixed(2)} tons` : 'N/A'}
-            </span>
-            <span className="results-stat-helper">
-              {yieldRiskAssumptions
-                ? `Estimate uses ${yieldRiskAssumptions.cpo_tonnes_per_infected_tree} tons/tree and an ${(yieldRiskAssumptions.loss_factor * 100).toFixed(0)}% loss factor.`
-                : yieldRiskSignal.helper}
-            </span>
-          </div>
-
-          <div className="results-stat tone-neutral">
-            <div className="results-stat-topline">
-              <span className="results-stat-label">Avg detection confidence</span>
-              <span className="results-stat-badge tone-neutral">YOLO-V8 model</span>
-            </div>
-            <span className="results-stat-value">{getDetectionConfidenceValue(result.infected_points)}</span>
-            <span className="results-stat-helper">
-              {detectionConfidenceRange ? `${detectionConfidenceRange} range` : 'No infected trees detected'}
-            </span>
-          </div>
+      <section className={`results-summary-banner severity-${summaryTone}`}>
+        <div className="results-summary-banner-content">
+          <span className="results-summary-banner-label">Summary</span>
+          <strong>{executiveSummary}</strong>
+          <p>{summaryAction}</p>
         </div>
+      </section>
 
-        <div className="results-summary-grid results-summary-grid-environment">
-          <div className={`results-stat tone-${temperatureSignal.tone}`}>
-            <div className="results-stat-topline">
-              <span className="results-stat-label">Avg temperature (°C)</span>
-              <span className={`results-stat-badge tone-${temperatureSignal.tone}`}>{temperatureSignal.status}</span>
-            </div>
-            <span className="results-stat-value">{result.environment_summary.avg_temperature}</span>
-            <span className="results-stat-helper">{temperatureSignal.helper}</span>
-          </div>
-
-          <div className={`results-stat tone-${humiditySignal.tone}`}>
-            <div className="results-stat-topline">
-              <span className="results-stat-label">Avg humidity (%)</span>
-              <span className={`results-stat-badge tone-${humiditySignal.tone}`}>{humiditySignal.status}</span>
-            </div>
-            <span className="results-stat-value">{result.environment_summary.avg_humidity}</span>
-            <span className="results-stat-helper">{humiditySignal.helper}</span>
-          </div>
-
-          <div className={`results-stat tone-${soilSignal.tone}`}>
-            <div className="results-stat-topline">
-              <span className="results-stat-label">Avg soil moisture (m³/m³)</span>
-              <span className={`results-stat-badge tone-${soilSignal.tone}`}>{soilSignal.status}</span>
-            </div>
-            <span className="results-stat-value">{result.environment_summary.avg_soil_moisture}</span>
-            <span className="results-stat-helper">{soilSignal.helper}</span>
-          </div>
+      <section className="results-section">
+        <div className="results-metric-grid">
+          {metricCards.map((card) => (
+            <article key={card.key} className="results-metric-card">
+              <div className="results-metric-card-top">
+                <span className="results-metric-label">{card.label}</span>
+                <span className={`results-metric-badge tone-${card.tone}`}>{card.status}</span>
+              </div>
+              <div className="results-metric-value">{card.value}</div>
+              <p className="results-metric-description">{card.description}</p>
+            </article>
+          ))}
         </div>
-      </div>
+      </section>
 
-      <h2 className="results-section-title">Infection Risk Map</h2>
+      <section className="results-section">
+        <h2 className="results-section-title">Infection Risk Map</h2>
 
-      <div className="results-main-grid">
-        <div className="results-visual-column" ref={visualColumnRef}>
-          <div className="results-legend" aria-label="Heatmap legend">
-            <div className="results-legend-items">
-              <span className="results-legend-item">
-                <span className="results-legend-swatch risk-high" />
-                High risk
-              </span>
-              <span className="results-legend-item">
-                <span className="results-legend-swatch risk-medium" />
-                Medium risk
-              </span>
-              <span className="results-legend-item">
-                <span className="results-legend-swatch risk-low" />
-                Low risk
-              </span>
+        <div className="results-map-layout">
+          <div className="results-map-column" ref={visualColumnRef}>
+            <div className="results-map-legend" aria-label="Heatmap legend">
+              <div className="results-map-legend-items">
+                <span className="results-map-legend-item">
+                  <span className="results-map-legend-swatch risk-high" />
+                  High risk
+                </span>
+                <span className="results-map-legend-item">
+                  <span className="results-map-legend-swatch risk-medium" />
+                  Medium risk
+                </span>
+                <span className="results-map-legend-item">
+                  <span className="results-map-legend-swatch risk-low" />
+                  Low risk
+                </span>
+                <span className="results-map-legend-item">
+                  <span className="results-map-legend-swatch risk-infected" />
+                  Blue dot = infected tree
+                </span>
+              </div>
             </div>
 
-            <span className="results-legend-selection">
-              🔵 Blue dots = infected trees
+            <div className="results-image-block interactive">
+              <img
+                src={result.output_image}
+                alt="Generated heatmap"
+                className="results-image"
+              />
+
+              <div className="heatmap-grid-overlay">
+                {result.heatmap.map((cell, index) => {
+                  const isSelected =
+                    selectedCell &&
+                    selectedCell.x === cell.x &&
+                    selectedCell.y === cell.y
+
+                  return (
+                    <button
+                      key={index}
+                      type="button"
+                      className={`heatmap-grid-cell ${isSelected ? 'selected' : ''}`}
+                      onClick={() => handleSelectCell(cell)}
+                      aria-label={`Select heatmap cell row ${cell.y}, column ${cell.x}`}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          <aside
+            className="results-side-panel"
+            style={detailPanelHeight ? { minHeight: `${detailPanelHeight}px` } : undefined}
+          >
+            {selectedCell ? (
+              <div className="results-side-panel-content">
+                {detailView === 'overview' ? (
+                  <>
+                    <span className={`results-priority-kicker risk-${selectedCell.risk}`}>Priority</span>
+                    <h3 className="results-priority-heading">
+                      <span>{riskHeadingLines[0]}</span>
+                      <span>{riskHeadingLines[1]}</span>
+                    </h3>
+                    <p className="results-priority-message">{getRiskAdvisory(selectedCell.risk)}</p>
+
+                    <div className="results-detail-block">
+                      <h4>{getRecommendationHeading(selectedCell.risk)}</h4>
+                      <ul>
+                        {visibleActions.map((action, index) => (
+                          <li key={index}>{action}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="results-detail-block">
+                      <h4>Risk Score</h4>
+                      <p className="results-detail-score">
+                        {(selectedCell.risk_score * 100).toFixed(2)}%
+                        <span className="results-detail-score-label">
+                          {getRiskScoreLabel(selectedCell.risk)}
+                        </span>
+                      </p>
+                    </div>
+
+                    <div className="results-detail-block">
+                      <h4>Why this result was assigned</h4>
+                      <ul>
+                        {visibleNarrative.map((reason, index) => (
+                          <li key={index}>{reason}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="results-detail-block results-detail-footer">
+                      <button
+                        type="button"
+                        className="results-details-toggle button-secondary"
+                        onClick={() => setDetailView('details')}
+                      >
+                        Show supporting details
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="results-detail-block results-detail-block-first">
+                      <h4>Supporting Details</h4>
+                      <ul className="results-supporting-list">
+                        <li><strong>Latitude:</strong> {selectedCell.lat}</li>
+                        <li><strong>Longitude:</strong> {selectedCell.lon}</li>
+                        <li><strong>Temperature (C):</strong> {selectedCell.factors.temperature}</li>
+                        <li><strong>Humidity (%):</strong> {selectedCell.factors.humidity}</li>
+                        <li><strong>Soil moisture:</strong> {selectedCell.factors.soil_moisture}</li>
+                        <li><strong>Infected trees in this area:</strong> {selectedCell.detected_infected_trees}</li>
+                        <li><strong>Nearby infected tree:</strong> {selectedCell.infection_nearby ? 'Yes' : 'No'}</li>
+                      </ul>
+                    </div>
+
+                    <div className="results-detail-block results-detail-footer">
+                      <button
+                        type="button"
+                        className="results-details-toggle button-secondary"
+                        onClick={() => setDetailView('overview')}
+                      >
+                        Back to overall analysis
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="results-side-empty">
+                <h3>Select a risk cell</h3>
+                <p>Choose an area on the heatmap to review its recommended action plan.</p>
+              </div>
+            )}
+          </aside>
+        </div>
+      </section>
+
+      <section className="results-section">
+        <h2 className="results-section-title">Estimated Risk Expansion</h2>
+
+        <div className="results-simulation-section">
+          <div className="results-simulation-header">
+            <div className="results-simulation-title-group">
+              <span className="results-simulation-kicker">Projected spread timeline</span>
+              <div className="results-simulation-help-wrap">
+                <button
+                  type="button"
+                  className="results-simulation-help-button button-secondary"
+                  aria-label="Explain simulation timeline"
+                  aria-expanded={isSimulationHelpOpen}
+                  onClick={() => setIsSimulationHelpOpen((current) => !current)}
+                >
+                  ?
+                </button>
+
+                {isSimulationHelpOpen ? (
+                  <div className="results-simulation-help-popover" role="note">
+                    Move the timeline to see projected spread over {Math.max(0, expectedSimulationFrames - 1)} week{expectedSimulationFrames - 1 === 1 ? '' : 's'} if no intervention is taken.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            <span className="results-week-label">
+              {selectedWeek === 0 ? 'Current state' : `Week ${selectedWeek}`}
             </span>
           </div>
 
-          <div className="results-image-block interactive">
+          <div className="results-simulation-image-wrap">
             <img
-              src={result.output_image}
-              alt="Generated heatmap"
-              className="results-image"
+              src={simulationImage}
+              alt={`Simulation week ${selectedWeek}`}
+              className="results-simulation-image"
             />
+          </div>
 
-            <div className="heatmap-grid-overlay">
-              {result.heatmap.map((cell, index) => {
-                const isSelected =
-                  selectedCell &&
-                  selectedCell.x === cell.x &&
-                  selectedCell.y === cell.y
+          {simulationFrameStatus !== 'complete' ? (
+            <p className="results-simulation-status">
+              {simulationFrameStatus === 'error'
+                  ? 'Future simulation frames could not be prepared right now.'
+                  : 'Preparing future simulation frames...'}
+            </p>
+          ) : null}
 
-                return (
-                  <button
-                    key={index}
-                    type="button"
-                    className={`heatmap-grid-cell ${isSelected ? 'selected' : ''}`}
-                    onClick={() => handleSelectCell(cell)}
-                    aria-label={`Select heatmap cell row ${cell.y}, column ${cell.x}`}
-                  />
-                )
-              })}
+          <div className="results-slider-wrap">
+            <div className="results-slider-caption">
+              <span>Current state</span>
+              <span>
+                {maxSimulationWeek === 0
+                  ? `Week ${Math.max(0, expectedSimulationFrames - 1)}`
+                  : `Week ${maxSimulationWeek}`}
+              </span>
             </div>
+            <input
+              type="range"
+              min="0"
+              max={maxSimulationWeek}
+              value={selectedWeek}
+              onChange={(e) => setSelectedWeek(Number(e.target.value))}
+              className="results-slider"
+              disabled={maxSimulationWeek === 0}
+            />
           </div>
         </div>
+      </section>
 
-        <div
-          className="results-detail-panel"
-          style={detailPanelHeight ? { height: `${detailPanelHeight}px` } : undefined}
-        >
-          {selectedCell && (
-            <div className="results-detail-content">
-              {detailView === 'overview' ? (
-                <>
-                  <span className={`results-priority-kicker risk-${selectedCell.risk}`}>Priority</span>
-                  <h3 className="results-priority-heading">
-                    <span>{riskHeadingLines[0]}</span>
-                    <span>{riskHeadingLines[1]}</span>
-                  </h3>
-                  <p className="results-priority-message">{getRiskAdvisory(selectedCell.risk)}</p>
-
-                  <div className="results-detail-block">
-                    <h4>{getRecommendationHeading(selectedCell.risk)}</h4>
-                    <ul>
-                      {visibleActions.map((action, index) => (
-                        <li key={index}>{action}</li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="results-detail-block">
-                    <h4>Risk Score</h4>
-                    <p className="results-detail-score">
-                      {(selectedCell.risk_score * 100).toFixed(2)}%
-                      <span className="results-detail-score-label">
-                        {getRiskScoreLabel(selectedCell.risk)}
-                      </span>
-                    </p>
-                  </div>
-
-                  <div className="results-detail-block">
-                    <h4>Why this result was assigned</h4>
-                    <ul>
-                      {visibleNarrative.map((reason, index) => (
-                        <li key={index}>{reason}</li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="results-detail-block results-detail-footer">
-                    <button
-                      type="button"
-                      className="results-details-toggle"
-                      onClick={() => setDetailView('details')}
-                    >
-                      Show supporting details →
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="results-detail-block results-detail-block-first">
-                    <h4>Supporting Details</h4>
-                    <ul className="results-supporting-list">
-                      <li><strong>Latitude:</strong> {selectedCell.lat}</li>
-                      <li><strong>Longitude:</strong> {selectedCell.lon}</li>
-                      <li><strong>Temperature(°C):</strong> {selectedCell.factors.temperature}</li>
-                      <li><strong>Humidity(%):</strong> {selectedCell.factors.humidity}</li>
-                      <li><strong>Soil moisture(m³/m³):</strong> {selectedCell.factors.soil_moisture}</li>
-                      <li><strong>Infected trees in this area:</strong> {selectedCell.detected_infected_trees}</li>
-                      <li><strong>Nearby infected tree:</strong> {selectedCell.infection_nearby ? 'Yes' : 'No'}</li>
-                    </ul>
-                  </div>
-
-                  <div className="results-detail-block results-detail-footer">
-                    <button
-                      type="button"
-                      className="results-details-toggle"
-                      onClick={() => setDetailView('overview')}
-                    >
-                      ← Back to overall analysis
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="results-simulation-section">
-        <div className="results-simulation-header">
-          <div className="results-simulation-title-group">
-            <h2 className="results-section-title">Estimated Risk Expansion (If No Action Taken)</h2>
-            <div className="results-simulation-help-wrap">
-              <button
-                type="button"
-                className="results-simulation-help-button"
-                aria-label="Explain simulation timeline"
-                aria-expanded={isSimulationHelpOpen}
-                onClick={() => setIsSimulationHelpOpen((current) => !current)}
-              >
-                ?
-              </button>
-
-              {isSimulationHelpOpen ? (
-                <div className="results-simulation-help-popover" role="note">
-                  Move the timeline to see projected spread over {Math.max(0, expectedSimulationFrames - 1)} week{expectedSimulationFrames - 1 === 1 ? '' : 's'} if no intervention is taken.
-                </div>
-              ) : null}
-            </div>
-          </div>
-          <span className="results-week-label">
-            {selectedWeek === 0 ? 'Current state' : `Week ${selectedWeek}`}
-          </span>
-        </div>
-
-        <div className="results-simulation-image-wrap">
-          <img
-            src={simulationImage}
-            alt={`Simulation week ${selectedWeek}`}
-            className="results-simulation-image"
-          />
-        </div>
-
-        {simulationFrameStatus !== 'complete' ? (
-          <p className="results-simulation-status">
-            {simulationFrameStatus === 'error'
-              ? 'Future simulation frames could not be prepared right now.'
-              : 'Preparing future simulation frames...'}
-          </p>
-        ) : null}
-
-        <div className="results-slider-wrap">
-          <input
-            type="range"
-            min="0"
-            max={maxSimulationWeek}
-            value={selectedWeek}
-            onChange={(e) => setSelectedWeek(Number(e.target.value))}
-            className="results-slider"
-            disabled={maxSimulationWeek === 0}
-          />
-
-          <div className="results-slider-labels">
-            <span>Current state</span>
-            <span>{maxSimulationWeek === 0 ? 'Current state only' : `Week ${maxSimulationWeek}`}</span>
-          </div>
-        </div>
-      </div>
-
+      <section className="results-section">
+        <AgentChat result={result} />
+      </section>
     </div>
   )
 }
