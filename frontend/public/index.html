@@ -246,6 +246,185 @@
       }
     })
   </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const landingNav = document.querySelector('.landing-nav')
+      const heroSection = document.querySelector('.hero-section')
+      const heroKicker = document.querySelector('.hero-kicker')
+      const heroTitle = document.querySelector('.hero-title')
+      const heroSubtitle = document.querySelector('.hero-subtitle')
+      const heroCtaWrap = document.querySelector('.hero-cta-wrap')
+      const scrollCards = [
+        ...document.querySelectorAll('.how-section .step-card, .impact-section .step-card'),
+      ]
+
+      const heroSequence = [
+        { element: heroKicker, delay: 100 },
+        { element: heroSubtitle, delay: 1800 },
+        { element: heroCtaWrap, delay: 2100 },
+      ]
+
+      heroTitle?.classList.add('hero-title-typing-pending')
+
+      heroSequence.forEach(({ element, delay }) => {
+        if (!element) return
+        element.classList.add('anim-fade-up')
+        element.style.setProperty('--fade-up-delay', `${delay}ms`)
+      })
+
+      scrollCards.forEach((card) => {
+        card.classList.add('scroll-reveal')
+      })
+
+      window.setTimeout(() => {
+        landingNav?.classList.add('nav-slide-in')
+        requestAnimationFrame(() => {
+          heroSequence.forEach(({ element }) => {
+            element?.classList.add('is-visible')
+          })
+        })
+      }, 50)
+
+      const startTypewriter = (target) => {
+        if (!target) return
+
+        target.classList.remove('hero-title-typing-pending')
+        const normalizedHtml = target.innerHTML.replace(/<\/br>/gi, '<br>')
+        const textLines = normalizedHtml
+          .split(/<br\s*\/?>/i)
+          .map((segment) => {
+            const decoder = document.createElement('div')
+            decoder.innerHTML = segment
+            return decoder.textContent.replace(/\s+/g, ' ').trim()
+          })
+          .filter(Boolean)
+
+        const fullText = textLines.join('\n')
+        let index = 0
+
+        target.classList.add('typing-active')
+
+        const renderTypedContent = (typedText) => {
+          const safeHtml = typedText
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\n/g, '<br>')
+          target.innerHTML = `${safeHtml}<span class="hero-type-cursor" aria-hidden="true">|</span>`
+        }
+
+        const typeNextCharacter = () => {
+          renderTypedContent(fullText.slice(0, index))
+
+          if (index >= fullText.length) {
+            target.classList.remove('typing-active')
+            target.innerHTML = fullText
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/\n/g, '<br>')
+            return
+          }
+
+          index += 1
+          window.setTimeout(typeNextCharacter, 55)
+        }
+
+        typeNextCharacter()
+      }
+
+      window.setTimeout(() => {
+        startTypewriter(heroTitle)
+      }, 1000)
+
+      if (heroSection) {
+        heroSection.addEventListener('mousemove', (event) => {
+          const rect = heroSection.getBoundingClientRect()
+          const offsetX = event.clientX - rect.left - rect.width / 2
+          const offsetY = event.clientY - rect.top - rect.height / 2
+          const shiftX = offsetX * -0.02
+          const shiftY = offsetY * -0.02
+
+          heroSection.style.setProperty('--hero-parallax-x', `${shiftX}px`)
+          heroSection.style.setProperty('--hero-parallax-y', `${shiftY}px`)
+        })
+
+        heroSection.addEventListener('mouseleave', () => {
+          heroSection.style.setProperty('--hero-parallax-x', '0px')
+          heroSection.style.setProperty('--hero-parallax-y', '0px')
+        })
+      }
+
+      const animateImpactValue = (element) => {
+        if (!element || element.dataset.countAnimated === 'true') return
+
+        const rawValue = element.textContent.trim()
+        let formatter = (value) => Math.round(value).toString()
+        let endValue = 0
+
+        if (rawValue.endsWith('%')) {
+          endValue = Number.parseFloat(rawValue)
+          formatter = (value) => `${Math.round(value)}%`
+        } else if (/^RM/i.test(rawValue) && rawValue.endsWith('B')) {
+          endValue = Number.parseFloat(rawValue.replace(/[^0-9.]/g, ''))
+          formatter = (value) => `RM${value.toFixed(1)}B`
+        } else if (rawValue.endsWith('K')) {
+          endValue = Number.parseFloat(rawValue)
+          formatter = (value) => `${Math.round(value)}K`
+        }
+
+        const duration = 1600
+        const startTime = performance.now()
+        element.dataset.countAnimated = 'true'
+
+        const easeOutCubic = (progress) => 1 - Math.pow(1 - progress, 3)
+
+        const tick = (now) => {
+          const elapsed = now - startTime
+          const progress = Math.min(elapsed / duration, 1)
+          const eased = easeOutCubic(progress)
+          const currentValue = endValue * eased
+
+          element.textContent = formatter(currentValue)
+
+          if (progress < 1) {
+            requestAnimationFrame(tick)
+          } else {
+            element.textContent = rawValue
+          }
+        }
+
+        requestAnimationFrame(tick)
+      }
+
+      const revealObserver = new IntersectionObserver(
+        (entries, observer) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return
+
+            const target = entry.target
+
+            if (target.classList.contains('step-card')) {
+              const siblings = [...target.parentElement.children]
+              const delay = siblings.indexOf(target) * 120
+              target.style.transitionDelay = `${delay}ms`
+              target.classList.add('is-visible')
+
+              const impactValue = target.querySelector('.impact-value')
+              if (impactValue) {
+                animateImpactValue(impactValue)
+              }
+            }
+
+            observer.unobserve(target)
+          })
+        },
+        { threshold: 0.2, rootMargin: '0px 0px -10% 0px' }
+      )
+
+      scrollCards.forEach((card) => revealObserver.observe(card))
+    })
+  </script>
 </body>
 
 </html>

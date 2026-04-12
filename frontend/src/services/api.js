@@ -128,3 +128,41 @@ export async function deleteAllHistoryScans() {
 
   return parseResponse(response, 'Failed to delete all history')
 }
+
+export async function fetchLands() {
+  const res = await fetch(`${API_BASE}/lands`, {
+    headers: { 'X-Device-Id': getDeviceId() },
+  })
+  if (!res.ok) throw new Error('Failed to fetch lands')
+  return res.json()
+}
+
+export async function fetchLandScans(landId) {
+  const res = await fetch(`${API_BASE}/lands/${landId}/scans`, {
+    headers: { 'X-Device-Id': getDeviceId() },
+  })
+  if (!res.ok) throw new Error('Failed to fetch land scans')
+  return res.json()
+}
+
+export async function renameLand(landId, name) {
+  const res = await fetch(`${API_BASE}/lands/${landId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Device-Id': getDeviceId(),
+    },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) throw new Error('Failed to rename land')
+  return res.json()
+}
+
+export async function deleteLand(landId) {
+  const res = await fetch(`${API_BASE}/lands/${landId}`, {
+    method: 'DELETE',
+    headers: { 'X-Device-Id': getDeviceId() },
+  })
+  if (!res.ok) throw new Error('Failed to delete land')
+  return res.json()
+}

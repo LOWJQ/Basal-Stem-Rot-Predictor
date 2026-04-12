@@ -2621,3 +2621,116 @@ html[data-view='analysis'] #landing-page {
     top: 12px !important;
   }
 }
+
+.landing-nav {
+  transform: translateY(-100%);
+}
+
+.landing-nav.nav-slide-in {
+  animation: landingNavSlideDown 0.6s ease-out 0.05s forwards;
+}
+
+.hero-section {
+  --hero-parallax-x: 0px;
+  --hero-parallax-y: 0px;
+  background-position:
+    center top,
+    calc(50% + var(--hero-parallax-x)) calc(0% + var(--hero-parallax-y));
+  background-size:
+    auto,
+    100%;
+  animation: kenBurns 18s ease-in-out infinite alternate;
+  will-change: background-position, background-size;
+}
+
+.anim-fade-up {
+  opacity: 0;
+  transform: translateY(24px);
+}
+
+.anim-fade-up.is-visible {
+  animation: fadeUp 0.72s ease forwards;
+  animation-delay: var(--fade-up-delay, 0ms);
+}
+
+.hero-title.typing-active,
+.hero-title.typed-done {
+  white-space: normal;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.hero-title.hero-title-typing-pending {
+  opacity: 0;
+}
+
+.hero-type-cursor {
+  display: inline-block;
+  margin-left: 2px;
+  color: currentColor;
+  animation: blinkCursor 0.85s steps(1, end) infinite;
+}
+
+.step-card.scroll-reveal {
+  opacity: 0;
+  transform: translateY(32px);
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s ease;
+  will-change: opacity, transform;
+}
+
+.step-card.scroll-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@keyframes landingNavSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes kenBurns {
+  from {
+    background-size:
+      auto,
+      100%;
+  }
+
+  to {
+    background-size:
+      auto,
+      108%;
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes blinkCursor {
+  0%,
+  49% {
+    opacity: 1;
+  }
+
+  50%,
+  100% {
+    opacity: 0;
+  }
+}

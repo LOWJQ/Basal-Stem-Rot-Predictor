@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
-import { Upload, Images } from 'lucide-react'
+import { Upload, Image as ImageIcon } from 'lucide-react'
 import { buildImageEntries } from './imageEntryUtils'
 
-export default function UploadSection({ onReview, isLoading, error }) {
+export default function UploadSection({ onAnalyze, isLoading, error }) {
   const fileInputRef = useRef(null)
   const [dragActive, setDragActive] = useState(false)
   const [extracting, setExtracting] = useState(false)
@@ -15,12 +15,18 @@ export default function UploadSection({ onReview, isLoading, error }) {
   }
 
   const processFiles = async (fileList) => {
+    const firstFile = Array.from(fileList || []).find((file) => (
+      file.type === 'image/jpeg' || file.type === 'image/png'
+    ))
+
+    if (!firstFile) return
+
     setExtracting(true)
-    const entries = await buildImageEntries(fileList)
+    const entries = await buildImageEntries([firstFile])
     setExtracting(false)
 
-    if (entries.length === 0) return
-    onReview(entries)
+    if (!entries.length) return
+    onAnalyze(entries[0])
   }
 
   const handleFileChange = (event) => {
@@ -73,10 +79,10 @@ export default function UploadSection({ onReview, isLoading, error }) {
               <>
                 <Upload size={26} className="upload-icon" />
                 <div className="upload-text-block">
-                  <span className="composer-main-text">Drop images here or click to upload</span>
+                  <span className="composer-main-text">Drop an image here or click to upload</span>
                   <span className="upload-hint">
-                    <Images size={12} />
-                    Multiple images supported - JPEG or PNG - GPS extracted automatically
+                    <ImageIcon size={12} />
+                    Single image supported - JPEG or PNG - GPS extracted automatically
                   </span>
                 </div>
               </>
@@ -87,7 +93,6 @@ export default function UploadSection({ onReview, isLoading, error }) {
             ref={fileInputRef}
             type="file"
             accept="image/jpeg,image/png"
-            multiple
             onChange={handleFileChange}
             style={{ display: 'none' }}
           />

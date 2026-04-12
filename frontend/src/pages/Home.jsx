@@ -7,8 +7,8 @@ import {
   Trash2,
 } from 'lucide-react'
 import UploadSection from '../services/UploadSection'
-import BatchReviewPage from '../services/BatchReviewPage'
-import BatchResultsView from '../services/BatchResultsView'
+import SimpleResultsView from '../services/SimpleResultsView'
+import AgentChat from '../services/AgentChat'
 import AgentStream from '../services/AgentStream'
 import {
   deleteAllHistoryScans,
@@ -19,119 +19,15 @@ import {
   predictScan,
 } from '../services/api'
 
-const HISTORY_BATCH_STORAGE_KEY = 'bsr-history-batches'
-const LOCAL_MAX_CONCURRENT_ANALYSES = 7
-const DEPLOYED_MAX_CONCURRENT_ANALYSES = 3
+function buildAnalysisFormData(entry) {
+  const formData = new FormData()
+  formData.append('image', entry.file)
 
-function readStoredHistoryBatches() {
-  try {
-    const stored = window.localStorage.getItem(HISTORY_BATCH_STORAGE_KEY)
-    if (!stored) return []
+  if (entry.lat) formData.append('lat', entry.lat)
+  if (entry.lon) formData.append('lon', entry.lon)
+  if (entry.altitude) formData.append('altitude', entry.altitude)
 
-    const parsed = JSON.parse(stored)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-function writeStoredHistoryBatches(batches) {
-  window.localStorage.setItem(HISTORY_BATCH_STORAGE_KEY, JSON.stringify(batches))
-}
-
-function createHistoryBatch(scanIds) {
-  const existingBatches = readStoredHistoryBatches()
-  const nextNumber = existingBatches.reduce((maxNumber, batch) => {
-    const match = /^Scan history (\d+)$/.exec(batch.label || '')
-    return match ? Math.max(maxNumber, Number(match[1])) : maxNumber
-  }, 0) + 1
-
-  const nextBatch = {
-    id: `batch-${Date.now()}`,
-    label: `Scan history ${nextNumber}`,
-    createdAt: new Date().toISOString(),
-    scanIds,
-  }
-
-  writeStoredHistoryBatches([nextBatch, ...existingBatches])
-  return nextBatch
-}
-
-function buildHistoryGroups(historyItems) {
-  const itemsById = new Map(historyItems.map((item) => [item.id, item]))
-  const matchedIds = new Set()
-
-  const groups = readStoredHistoryBatches()
-    .map((batch) => {
-      const scanIds = (batch.scanIds || []).filter((scanId) => itemsById.has(scanId))
-      scanIds.forEach((scanId) => matchedIds.add(scanId))
-
-      if (!scanIds.length) return null
-
-      return {
-        ...batch,
-        scanIds,
-      }
-    })
-    .filter(Boolean)
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-
-  const unmatchedItems = historyItems.filter((item) => !matchedIds.has(item.id))
-  if (unmatchedItems.length) {
-    groups.push({
-      id: 'legacy-history',
-      label: 'Scan history',
-      createdAt: unmatchedItems[0].timestamp,
-      scanIds: unmatchedItems.map((item) => item.id),
-    })
-  }
-
-  return groups
-}
-
-async function runWithConcurrencyLimit(items, limit, worker) {
-  const results = new Array(items.length)
-  let nextIndex = 0
-
-  async function runner() {
-    while (true) {
-      const currentIndex = nextIndex
-      nextIndex += 1
-
-      if (currentIndex >= items.length) {
-        return
-      }
-
-      try {
-        results[currentIndex] = {
-          status: 'fulfilled',
-          value: await worker(items[currentIndex], currentIndex),
-        }
-      } catch (error) {
-        results[currentIndex] = {
-          status: 'rejected',
-          reason: error,
-        }
-      }
-    }
-  }
-
-  const runnerCount = Math.min(limit, items.length)
-  await Promise.all(Array.from({ length: runnerCount }, () => runner()))
-  return results
-}
-
-function getMaxConcurrentAnalyses() {
-  if (typeof window === 'undefined') {
-    return DEPLOYED_MAX_CONCURRENT_ANALYSES
-  }
-
-  const hostname = window.location.hostname
-  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1'
-
-  return isLocalhost
-    ? LOCAL_MAX_CONCURRENT_ANALYSES
-    : DEPLOYED_MAX_CONCURRENT_ANALYSES
+  return formData
 }
 
 export default function Home() {
@@ -141,30 +37,23 @@ export default function Home() {
   const [error, setError] = useState('')
   const [historyError, setHistoryError] = useState('')
   const [historyItems, setHistoryItems] = useState([])
-  const [historyGroups, setHistoryGroups] = useState([])
+  const [selectedHistoryId, setSelectedHistoryId] = useState(null)
+  const [currentResult, setCurrentResult] = useState(null)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isDeletingAllHistory, setIsDeletingAllHistory] = useState(false)
   const [historyActionLoadingId, setHistoryActionLoadingId] = useState(null)
   const [openMenuId, setOpenMenuId] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState(false)
-  const [reviewItems, setReviewItems] = useState(null)
-  const [batchResults, setBatchResults] = useState(null)
   const [agentStreamData, setAgentStreamData] = useState(null)
   const [showAgentStream, setShowAgentStream] = useState(false)
-  const [selectedBatchHistoryId, setSelectedBatchHistoryId] = useState(null)
-  const [selectedHistoryGroupId, setSelectedHistoryGroupId] = useState(null)
-  const [batchProgress, setBatchProgress] = useState(null)
-  const [batchItemProgress, setBatchItemProgress] = useState({})
 
   const loadHistory = async () => {
     try {
       setIsHistoryLoading(true)
       setHistoryError('')
       const response = await fetchHistory()
-      const scans = response.scans || []
-      setHistoryItems(scans)
-      setHistoryGroups(buildHistoryGroups(scans))
+      setHistoryItems(response.scans || [])
     } catch (err) {
       setHistoryError(err.message)
     } finally {
@@ -182,204 +71,72 @@ export default function Home() {
     return () => window.removeEventListener('click', handleWindowClick)
   }, [])
 
-  const loadBatchHistory = async (groupId = null, preferredHistoryId = null) => {
-    const historyResponse = await fetchHistory()
-    const scans = historyResponse.scans || []
-    const groups = buildHistoryGroups(scans)
-
-    setHistoryItems(scans)
-    setHistoryGroups(groups)
-
-    if (!scans.length) {
-      setBatchResults(null)
-      setSelectedBatchHistoryId(null)
-      setSelectedHistoryGroupId(null)
-      return []
-    }
-
-    const selectedGroup = groups.find((group) => group.id === groupId) || groups[0]
-    if (!selectedGroup) {
-      setBatchResults(null)
-      setSelectedBatchHistoryId(null)
-      setSelectedHistoryGroupId(null)
-      return []
-    }
-
-    setSelectedHistoryGroupId(selectedGroup.id)
-
-    const results = await Promise.all(
-      selectedGroup.scanIds.map(async (scanId) => {
-        const scan = scans.find((item) => item.id === scanId)
-        if (!scan) return null
-
-        const detailResponse = await fetchHistoryScan(scan.id)
-        const detail = { ...detailResponse.scan }
-
-        if (detail.payload && !detail.payload.report) {
-          try {
-            const reportResponse = await fetchHistoryReport(scan.id)
-            detail.payload = { ...detail.payload, report: reportResponse.report }
-          } catch {
-            // Older scans may not have report data yet, so leave payload as-is.
-          }
-        }
-
-        if (!detail.payload) {
-          return null
-        }
-
-        return {
-          ...detail.payload,
-          history_id: detail.id,
-          title: detail.title,
-          timestamp: detail.timestamp,
-        }
-      })
-    )
-
-    const availableResults = results.filter(Boolean)
-    setBatchResults(availableResults)
-
-    const preferredExists = availableResults.some((item) => item.history_id === preferredHistoryId)
-    setSelectedBatchHistoryId(
-      preferredExists ? preferredHistoryId : availableResults[0]?.history_id ?? null
-    )
-
-    return availableResults
-  }
-
   const resetToNewAnalysis = () => {
-    setBatchResults(null)
     setAgentStreamData(null)
     setShowAgentStream(false)
-    setSelectedBatchHistoryId(null)
-    setSelectedHistoryGroupId(null)
-    setReviewItems(null)
+    setCurrentResult(null)
+    setSelectedHistoryId(null)
     setError('')
     setIsLoading(false)
     setIsOpeningHistory(false)
-    setBatchProgress(null)
-    setBatchItemProgress({})
     setOpenMenuId(null)
   }
 
-  const runScan = async (formData) => {
-    const response = await predictScan(formData)
-    return response.data
-  }
-
-  const handleAnalyzeAll = async (batchItems) => {
+  const handleAnalyzeImage = async (entry) => {
     try {
       setIsLoading(true)
       setError('')
-      setBatchResults(null)
-      setSelectedBatchHistoryId(null)
-      setBatchItemProgress(
-        batchItems.reduce((acc, item) => {
-          acc[item.id] = 'running'
-          return acc
-        }, {})
-      )
-      setBatchProgress({
-        current: 0,
-        total: batchItems.length,
-        status: 'running',
-        currentLabel: 'Starting all analyses...',
-      })
+      setCurrentResult(null)
+      setSelectedHistoryId(null)
+      setAgentStreamData(null)
+      setShowAgentStream(false)
 
-      let settledCount = 0
-      const settledResults = await runWithConcurrencyLimit(
-        batchItems,
-        getMaxConcurrentAnalyses(),
-        async (item) => {
-          const batchResult = await runScan(item.formData)
-          settledCount += 1
-          setBatchItemProgress((current) => ({ ...current, [item.id]: 'done' }))
-          setBatchProgress({
-            current: settledCount,
-            total: batchItems.length,
-            status: 'running',
-            currentLabel: item.fileName
-              ? `Finished ${item.fileName}`
-              : `Finished item ${settledCount}`,
-          })
-          return batchResult
-        }
-      )
+      const response = await predictScan(buildAnalysisFormData(entry))
+      const result = response.data
 
-      const successfulResults = []
-      const failedResults = []
+      setCurrentResult(result)
+      setSelectedHistoryId(result?.history_id ?? null)
+      setAgentStreamData(result)
+      setShowAgentStream(true)
 
-      settledResults.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-          successfulResults.push(result.value)
-          return
-        }
-
-        failedResults.push(result.reason)
-        settledCount += 1
-        setBatchItemProgress((current) => ({ ...current, [batchItems[index].id]: 'error' }))
-        setBatchProgress({
-          current: settledCount,
-          total: batchItems.length,
-          status: 'running',
-          currentLabel: batchItems[index].fileName
-            ? `Failed ${batchItems[index].fileName}`
-            : `Failed item ${settledCount}`,
-        })
-      })
-
-      if (successfulResults.length) {
-        const nextBatch = createHistoryBatch(successfulResults.map((result) => result.history_id))
-        setSelectedHistoryGroupId(nextBatch.id)
-        await loadHistory()
-      }
-
-      if (!failedResults.length) {
-        setReviewItems(null)
-        if (successfulResults.length > 0) {
-          setAgentStreamData(successfulResults[0])
-          setShowAgentStream(true)
-        }
-        setBatchResults(successfulResults)
-        setSelectedBatchHistoryId(successfulResults[0]?.history_id ?? null)
-        setBatchProgress({
-          current: successfulResults.length,
-          total: batchItems.length,
-          status: 'done',
-          currentLabel: 'Batch analysis complete',
-        })
-        return
-      }
-
-      const firstError = failedResults[0]
-      const fallbackMessage = failedResults.length === batchItems.length
-        ? 'Analysis failed. Try again with fewer images or retry in a moment.'
-        : `${failedResults.length} image(s) failed. Successful analyses were saved to history.`
-
-      setError(firstError?.message || fallbackMessage)
-      setBatchProgress({
-        current: successfulResults.length,
-        total: batchItems.length,
-        status: 'error',
-        currentLabel: fallbackMessage,
-      })
+      await loadHistory()
     } catch (err) {
       setError(err.message || 'Analysis failed. Please try again.')
-      setBatchProgress((current) => current ? { ...current, status: 'error' } : null)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleOpenHistory = async (groupId, preferredHistoryId = null) => {
+  const handleOpenHistory = async (scanId) => {
     try {
       setIsOpeningHistory(true)
       setError('')
-      setReviewItems(null)
-      setBatchProgress(null)
+      setAgentStreamData(null)
+      setShowAgentStream(false)
 
-      await loadBatchHistory(groupId, preferredHistoryId)
+      const detailResponse = await fetchHistoryScan(scanId)
+      const detail = { ...detailResponse.scan }
+
+      if (detail.payload && !detail.payload.report) {
+        try {
+          const reportResponse = await fetchHistoryReport(scanId)
+          detail.payload = { ...detail.payload, report: reportResponse.report }
+        } catch {
+          // Older scans may not have report data yet.
+        }
+      }
+
+      if (!detail.payload) {
+        throw new Error('Saved analysis payload is unavailable for this scan.')
+      }
+
+      setCurrentResult({
+        ...detail.payload,
+        history_id: detail.id,
+        title: detail.title,
+        timestamp: detail.timestamp,
+      })
+      setSelectedHistoryId(detail.id)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -395,10 +152,8 @@ export default function Home() {
       await deleteAllHistoryScans()
       await loadHistory()
 
-      setBatchResults(null)
-      setSelectedBatchHistoryId(null)
-      setSelectedHistoryGroupId(null)
-      writeStoredHistoryBatches([])
+      setCurrentResult(null)
+      setSelectedHistoryId(null)
       setDeleteTarget(null)
       setOpenMenuId(null)
       setIsDeleteAllConfirmOpen(false)
@@ -410,45 +165,28 @@ export default function Home() {
     }
   }
 
-  const handleToggleMenu = (event, groupId) => {
+  const handleToggleMenu = (event, scanId) => {
     event.stopPropagation()
-    setOpenMenuId((current) => (current === groupId ? null : groupId))
+    setOpenMenuId((current) => (current === scanId ? null : scanId))
   }
 
-  const handleRequestDeleteHistoryGroup = (event, group) => {
+  const handleRequestDeleteScan = (event, scan) => {
     event.stopPropagation()
     setOpenMenuId(null)
-    setDeleteTarget(group)
+    setDeleteTarget(scan)
   }
 
-  const handleConfirmDeleteHistoryGroup = async () => {
+  const handleConfirmDeleteScan = async () => {
     if (!deleteTarget) return
 
     try {
       setHistoryActionLoadingId(deleteTarget.id)
-      const deleteResults = await Promise.allSettled(
-        deleteTarget.scanIds.map((scanId) => deleteHistoryScan(scanId))
-      )
-
-      const blockingFailure = deleteResults.find((result) => (
-        result.status === 'rejected' &&
-        !String(result.reason?.message || '').includes('not found')
-      ))
-
-      if (blockingFailure?.status === 'rejected') {
-        throw blockingFailure.reason
-      }
-
-      writeStoredHistoryBatches(
-        readStoredHistoryBatches().filter((batch) => batch.id !== deleteTarget.id)
-      )
-
+      await deleteHistoryScan(deleteTarget.id)
       await loadHistory()
 
-      if (selectedHistoryGroupId === deleteTarget.id) {
-        setBatchResults(null)
-        setSelectedBatchHistoryId(null)
-        setSelectedHistoryGroupId(null)
+      if (selectedHistoryId === deleteTarget.id) {
+        setCurrentResult(null)
+        setSelectedHistoryId(null)
       }
 
       setDeleteTarget(null)
@@ -492,27 +230,21 @@ export default function Home() {
       )
     }
 
-    if (batchResults?.length) {
+    if (currentResult) {
       return (
-        <BatchResultsView
-          results={batchResults}
-          selectedHistoryId={selectedBatchHistoryId}
-          onSelectHistory={setSelectedBatchHistoryId}
-        />
-      )
-    }
+        <section className="dashboard-page">
+          <div className="analysis-results-shell">
+            <div className="analysis-results-main">
+              <SimpleResultsView result={currentResult} />
+            </div>
 
-    if (reviewItems) {
-      return (
-        <BatchReviewPage
-          items={reviewItems}
-          onAnalyzeAll={handleAnalyzeAll}
-          onBack={resetToNewAnalysis}
-          isLoading={isLoading}
-          progress={batchProgress}
-          itemProgress={batchItemProgress}
-          error={error}
-        />
+            <aside className="analysis-results-chat">
+              <div className="analysis-results-chat-inner">
+                <AgentChat result={currentResult} />
+              </div>
+            </aside>
+          </div>
+        </section>
       )
     }
 
@@ -530,7 +262,7 @@ export default function Home() {
         </div>
 
         <UploadSection
-          onReview={setReviewItems}
+          onAnalyze={handleAnalyzeImage}
           isLoading={isLoading}
           error={error}
         />
@@ -558,32 +290,32 @@ export default function Home() {
             <div className="sidebar-list">
               {isHistoryLoading ? (
                 <div className="sidebar-state">Loading history...</div>
-              ) : historyGroups.length ? (
-                historyGroups.map((group) => (
+              ) : historyItems.length ? (
+                historyItems.map((scan) => (
                   <div
-                    key={group.id}
-                    className={`sidebar-history-row ${selectedHistoryGroupId === group.id ? 'active' : ''} ${openMenuId === group.id ? 'menu-open' : ''}`}
+                    key={scan.id}
+                    className={`sidebar-history-row ${selectedHistoryId === scan.id ? 'active' : ''} ${openMenuId === scan.id ? 'menu-open' : ''}`}
                   >
                     <button
-                      className={`sidebar-item sidebar-item-main ${selectedHistoryGroupId === group.id ? 'active' : ''}`}
-                      onClick={() => handleOpenHistory(group.id)}
-                      disabled={isOpeningHistory || historyActionLoadingId === group.id}
+                      className={`sidebar-item sidebar-item-main ${selectedHistoryId === scan.id ? 'active' : ''}`}
+                      onClick={() => handleOpenHistory(scan.id)}
+                      disabled={isOpeningHistory || historyActionLoadingId === scan.id}
                     >
                       <MessageSquare size={15} />
-                      <span>{group.label} ({group.scanIds.length})</span>
+                      <span>{scan.title || `Scan ${scan.id}`}</span>
                     </button>
 
                     <div className="sidebar-item-actions">
                       <button
                         type="button"
                         className="sidebar-icon-button"
-                        onClick={(e) => handleToggleMenu(e, group.id)}
-                        disabled={historyActionLoadingId === group.id}
+                        onClick={(e) => handleToggleMenu(e, scan.id)}
+                        disabled={historyActionLoadingId === scan.id}
                       >
                         <MoreHorizontal size={14} />
                       </button>
 
-                      {openMenuId === group.id ? (
+                      {openMenuId === scan.id ? (
                         <div
                           className="sidebar-context-menu"
                           onClick={(e) => e.stopPropagation()}
@@ -591,7 +323,7 @@ export default function Home() {
                           <button
                             type="button"
                             className="sidebar-context-item danger"
-                            onClick={(e) => handleRequestDeleteHistoryGroup(e, group)}
+                            onClick={(e) => handleRequestDeleteScan(e, scan)}
                           >
                             <Trash2 size={14} />
                             <span>Delete</span>
@@ -673,7 +405,7 @@ export default function Home() {
             <div className="delete-modal-body">
               <h2>Delete history?</h2>
               <p>
-                This will delete <strong>{deleteTarget.label}</strong> and its {deleteTarget.scanIds.length} saved result{deleteTarget.scanIds.length !== 1 ? 's' : ''}.
+                This will delete <strong>{deleteTarget.title || `Scan ${deleteTarget.id}`}</strong>.
               </p>
             </div>
 
@@ -690,7 +422,7 @@ export default function Home() {
               <button
                 type="button"
                 className="delete-confirm-button button-dark"
-                onClick={handleConfirmDeleteHistoryGroup}
+                onClick={handleConfirmDeleteScan}
                 disabled={historyActionLoadingId === deleteTarget.id}
               >
                 {historyActionLoadingId === deleteTarget.id ? 'Deleting...' : 'Delete'}
@@ -735,7 +467,6 @@ export default function Home() {
           </div>
         </div>
       ) : null}
-
     </div>
   )
 }
