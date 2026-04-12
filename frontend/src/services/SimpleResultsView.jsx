@@ -336,14 +336,11 @@ function buildExecutiveSummary(result) {
 }
 
 export default function SimpleResultsView({ result, onReportUpdate }) {
-  const visualColumnRef = useRef(null)
-  const [selectedCell, setSelectedCell] = useState(() => {
-    if (!result?.heatmap?.length) return null
-    return [...result.heatmap].sort((a, b) => b.risk_score - a.risk_score)[0]
-  })
+  const heatmapWrapRef = useRef(null)
+  const [selectedCell, setSelectedCell] = useState(null)
+  const [tooltipPosition, setTooltipPosition] = useState(null)
   const [selectedWeek, setSelectedWeek] = useState(0)
   const [detailView, setDetailView] = useState('overview')
-  const [detailPanelHeight, setDetailPanelHeight] = useState(null)
   const [isSimulationHelpOpen, setIsSimulationHelpOpen] = useState(false)
   const [resolvedSimulationFrames, setResolvedSimulationFrames] = useState(() => (
     Array.isArray(result?.simulation_frames) && result.simulation_frames.length
@@ -454,34 +451,54 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
     },
   ]
 
-  const handleSelectCell = (cell) => {
+  const closeCellTooltip = () => {
+    setSelectedCell(null)
+    setTooltipPosition(null)
+    setDetailView('overview')
+  }
+
+  const handleSelectCell = (cell, event) => {
+    const heatmapNode = heatmapWrapRef.current
+    const cellNode = event.currentTarget
+
+    if (!heatmapNode || !cellNode) {
+      setSelectedCell(cell)
+      setTooltipPosition(null)
+      setDetailView('overview')
+      return
+    }
+
+    if (selectedCell && selectedCell.x === cell.x && selectedCell.y === cell.y) {
+      closeCellTooltip()
+      return
+    }
+
+    const heatmapRect = heatmapNode.getBoundingClientRect()
+    const cellRect = cellNode.getBoundingClientRect()
+    const tooltipWidth = 320
+    const gap = 12
+    const shouldShowLeft = cellRect.right - heatmapRect.left + gap + tooltipWidth > heatmapRect.width
+
     setSelectedCell(cell)
+    setTooltipPosition({
+      top: Math.min(
+        Math.max(12, cellRect.top - heatmapRect.top),
+        Math.max(12, heatmapRect.height - 220)
+      ),
+      left: shouldShowLeft
+        ? Math.max(12, cellRect.left - heatmapRect.left - tooltipWidth - gap)
+        : Math.min(
+          heatmapRect.width - tooltipWidth - 12,
+          cellRect.right - heatmapRect.left + gap
+        ),
+      side: shouldShowLeft ? 'left' : 'right',
+    })
+    setDetailView('overview')
   }
 
   useEffect(() => {
-    const node = visualColumnRef.current
-    if (!node) return undefined
-
-    const updateHeight = () => {
-      setDetailPanelHeight(node.getBoundingClientRect().height)
-    }
-
-    updateHeight()
-
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateHeight)
-      return () => window.removeEventListener('resize', updateHeight)
-    }
-
-    const observer = new ResizeObserver(() => updateHeight())
-    observer.observe(node)
-    window.addEventListener('resize', updateHeight)
-
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', updateHeight)
-    }
-  }, [detailView, selectedCell, result])
+    closeCellTooltip()
+  }, [result?.history_id])
 
   useEffect(() => {
     const nextFrames = Array.isArray(result?.simulation_frames) && result.simulation_frames.length
@@ -573,44 +590,44 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
   ])
 
   return (
-    <div className="results-page">
-      <section className="results-page-intro">
-        <p className="results-page-label">Analysis dashboard</p>
-        <h1 className="results-title">Field Risk Overview</h1>
-        <p className="results-subtitle">
-          Review the detected infections, environmental signals, and recommended actions for this
-          scan.
-        </p>
-      </section>
+    <div className="results-page results-two-column-layout">
+      <div className="results-main-column">
+        <section className="results-page-intro">
+          <p className="results-page-label">Analysis dashboard</p>
+          <h1 className="results-title">Field Risk Overview</h1>
+          <p className="results-subtitle">
+            Review the detected infections, environmental signals, and recommended actions for this
+            scan.
+          </p>
+        </section>
 
-      <section className={`results-summary-banner severity-${summaryTone}`}>
-        <div className="results-summary-banner-content">
-          <span className="results-summary-banner-label">Summary</span>
-          <strong>{executiveSummary}</strong>
-          <p>{summaryAction}</p>
-        </div>
-      </section>
+        <section className={`results-summary-banner severity-${summaryTone}`}>
+          <div className="results-summary-banner-content">
+            <span className="results-summary-banner-label">Summary</span>
+            <strong>{executiveSummary}</strong>
+            <p>{summaryAction}</p>
+          </div>
+        </section>
 
-      <section className="results-section">
-        <div className="results-metric-grid">
-          {metricCards.map((card) => (
-            <article key={card.key} className="results-metric-card">
-              <div className="results-metric-card-top">
-                <span className="results-metric-label">{card.label}</span>
-                <span className={`results-metric-badge tone-${card.tone}`}>{card.status}</span>
-              </div>
-              <div className="results-metric-value">{card.value}</div>
-              <p className="results-metric-description">{card.description}</p>
-            </article>
-          ))}
-        </div>
-      </section>
+        <section className="results-section">
+          <div className="results-metric-grid">
+            {metricCards.map((card) => (
+              <article key={card.key} className="results-metric-card">
+                <div className="results-metric-card-top">
+                  <span className="results-metric-label">{card.label}</span>
+                  <span className={`results-metric-badge tone-${card.tone}`}>{card.status}</span>
+                </div>
+                <div className="results-metric-value">{card.value}</div>
+                <p className="results-metric-description">{card.description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
 
-      <section className="results-section">
-        <h2 className="results-section-title">Infection Risk Map</h2>
+        <section className="results-section">
+          <h2 className="results-section-title">Infection Risk Map</h2>
 
-        <div className="results-map-layout">
-          <div className="results-map-column" ref={visualColumnRef}>
+          <div className="results-map-column">
             <div className="results-map-legend" aria-label="Heatmap legend">
               <div className="results-map-legend-items">
                 <span className="results-map-legend-item">
@@ -632,7 +649,7 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
               </div>
             </div>
 
-            <div className="results-image-block interactive">
+            <div className="results-image-block interactive" ref={heatmapWrapRef}>
               <img
                 src={result.output_image}
                 alt="Generated heatmap"
@@ -651,176 +668,164 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
                       key={index}
                       type="button"
                       className={`heatmap-grid-cell ${isSelected ? 'selected' : ''}`}
-                      onClick={() => handleSelectCell(cell)}
+                      onClick={(event) => handleSelectCell(cell, event)}
                       aria-label={`Select heatmap cell row ${cell.y}, column ${cell.x}`}
                     />
                   )
                 })}
               </div>
-            </div>
-          </div>
 
-          <aside
-            className="results-side-panel"
-            style={detailPanelHeight ? { minHeight: `${detailPanelHeight}px` } : undefined}
-          >
-            {selectedCell ? (
-              <div className="results-side-panel-content">
-                {detailView === 'overview' ? (
-                  <>
-                    <span className={`results-priority-kicker risk-${selectedCell.risk}`}>Priority</span>
-                    <h3 className="results-priority-heading">
-                      <span>{riskHeadingLines[0]}</span>
-                      <span>{riskHeadingLines[1]}</span>
-                    </h3>
-                    <p className="results-priority-message">{getRiskAdvisory(selectedCell.risk)}</p>
-
-                    <div className="results-detail-block">
-                      <h4>{getRecommendationHeading(selectedCell.risk)}</h4>
-                      <ul>
-                        {visibleActions.map((action, index) => (
-                          <li key={index}>{action}</li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div className="results-detail-block">
-                      <h4>Risk Score</h4>
-                      <p className="results-detail-score">
-                        {(selectedCell.risk_score * 100).toFixed(2)}%
-                        <span className="results-detail-score-label">
-                          {getRiskScoreLabel(selectedCell.risk)}
-                        </span>
-                      </p>
-                    </div>
-
-                    <div className="results-detail-block">
-                      <h4>Why this result was assigned</h4>
-                      <ul>
-                        {visibleNarrative.map((reason, index) => (
-                          <li key={index}>{reason}</li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div className="results-detail-block results-detail-footer">
-                      <button
-                        type="button"
-                        className="results-details-toggle button-secondary"
-                        onClick={() => setDetailView('details')}
-                      >
-                        Show supporting details
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="results-detail-block results-detail-block-first">
-                      <h4>Supporting Details</h4>
-                      <ul className="results-supporting-list">
-                        <li><strong>Latitude:</strong> {selectedCell.lat}</li>
-                        <li><strong>Longitude:</strong> {selectedCell.lon}</li>
-                        <li><strong>Temperature (C):</strong> {selectedCell.factors.temperature}</li>
-                        <li><strong>Humidity (%):</strong> {selectedCell.factors.humidity}</li>
-                        <li><strong>Soil moisture:</strong> {selectedCell.factors.soil_moisture}</li>
-                        <li><strong>Infected trees in this area:</strong> {selectedCell.detected_infected_trees}</li>
-                        <li><strong>Nearby infected tree:</strong> {selectedCell.infection_nearby ? 'Yes' : 'No'}</li>
-                      </ul>
-                    </div>
-
-                    <div className="results-detail-block results-detail-footer">
-                      <button
-                        type="button"
-                        className="results-details-toggle button-secondary"
-                        onClick={() => setDetailView('overview')}
-                      >
-                        Back to overall analysis
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ) : (
-              <div className="results-side-empty">
-                <h3>Select a risk cell</h3>
-                <p>Choose an area on the heatmap to review its recommended action plan.</p>
-              </div>
-            )}
-          </aside>
-        </div>
-      </section>
-
-      <section className="results-section">
-        <h2 className="results-section-title">Estimated Risk Expansion</h2>
-
-        <div className="results-simulation-section">
-          <div className="results-simulation-header">
-            <div className="results-simulation-title-group">
-              <span className="results-simulation-kicker">Projected spread timeline</span>
-              <div className="results-simulation-help-wrap">
-                <button
-                  type="button"
-                  className="results-simulation-help-button button-secondary"
-                  aria-label="Explain simulation timeline"
-                  aria-expanded={isSimulationHelpOpen}
-                  onClick={() => setIsSimulationHelpOpen((current) => !current)}
+              {selectedCell && tooltipPosition ? (
+                <div
+                  className={`results-cell-tooltip tooltip-${tooltipPosition.side}`}
+                  style={{
+                    top: `${tooltipPosition.top}px`,
+                    left: `${tooltipPosition.left}px`,
+                  }}
                 >
-                  ?
-                </button>
+                  <button
+                    type="button"
+                    className="results-cell-tooltip-close"
+                    onClick={closeCellTooltip}
+                    aria-label="Close risk details"
+                  >
+                    &times;
+                  </button>
 
-                {isSimulationHelpOpen ? (
-                  <div className="results-simulation-help-popover" role="note">
-                    Move the timeline to see projected spread over {Math.max(0, expectedSimulationFrames - 1)} week{expectedSimulationFrames - 1 === 1 ? '' : 's'} if no intervention is taken.
-                  </div>
-                ) : null}
-              </div>
+                  {detailView === 'overview' ? (
+                    <>
+                      <span className={`results-priority-kicker risk-${selectedCell.risk}`}>Priority</span>
+                      <h3 className="results-priority-heading">
+                        <span>{riskHeadingLines[0]}</span>
+                        <span>{riskHeadingLines[1]}</span>
+                      </h3>
+                      <p className="results-priority-message">{getRiskAdvisory(selectedCell.risk)}</p>
+
+                      <div className="results-detail-block">
+                        <h4>{getRecommendationHeading(selectedCell.risk)}</h4>
+                        <ul>
+                          {visibleActions.map((action, index) => (
+                            <li key={index}>{action}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="results-detail-block results-detail-footer">
+                        <button
+                          type="button"
+                          className="results-details-toggle button-secondary"
+                          onClick={() => setDetailView('details')}
+                        >
+                          Show supporting details
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="results-detail-block results-detail-block-first">
+                        <h4>Supporting Details</h4>
+                        <ul className="results-supporting-list">
+                          <li><strong>Latitude:</strong> {selectedCell.lat}</li>
+                          <li><strong>Longitude:</strong> {selectedCell.lon}</li>
+                          <li><strong>Temperature (C):</strong> {selectedCell.factors.temperature}</li>
+                          <li><strong>Humidity (%):</strong> {selectedCell.factors.humidity}</li>
+                          <li><strong>Soil moisture:</strong> {selectedCell.factors.soil_moisture}</li>
+                          <li><strong>Infected trees in this area:</strong> {selectedCell.detected_infected_trees}</li>
+                          <li><strong>Nearby infected tree:</strong> {selectedCell.infection_nearby ? 'Yes' : 'No'}</li>
+                        </ul>
+                      </div>
+
+                      <div className="results-detail-block results-detail-footer">
+                        <button
+                          type="button"
+                          className="results-details-toggle button-secondary"
+                          onClick={() => setDetailView('overview')}
+                        >
+                          Back to summary
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : null}
             </div>
-            <span className="results-week-label">
-              {selectedWeek === 0 ? 'Current state' : `Week ${selectedWeek}`}
-            </span>
           </div>
+        </section>
 
-          <div className="results-simulation-image-wrap">
-            <img
-              src={simulationImage}
-              alt={`Simulation week ${selectedWeek}`}
-              className="results-simulation-image"
-            />
-          </div>
+        <section className="results-section">
+          <h2 className="results-section-title">Estimated Risk Expansion</h2>
 
-          {simulationFrameStatus !== 'complete' ? (
-            <p className="results-simulation-status">
-              {simulationFrameStatus === 'error'
-                  ? 'Future simulation frames could not be prepared right now.'
-                  : 'Preparing future simulation frames...'}
-            </p>
-          ) : null}
+          <div className="results-simulation-section">
+            <div className="results-simulation-header">
+              <div className="results-simulation-title-group">
+                <span className="results-simulation-kicker">Projected spread timeline</span>
+                <div className="results-simulation-help-wrap">
+                  <button
+                    type="button"
+                    className="results-simulation-help-button button-secondary"
+                    aria-label="Explain simulation timeline"
+                    aria-expanded={isSimulationHelpOpen}
+                    onClick={() => setIsSimulationHelpOpen((current) => !current)}
+                  >
+                    ?
+                  </button>
 
-          <div className="results-slider-wrap">
-            <div className="results-slider-caption">
-              <span>Current state</span>
-              <span>
-                {maxSimulationWeek === 0
-                  ? `Week ${Math.max(0, expectedSimulationFrames - 1)}`
-                  : `Week ${maxSimulationWeek}`}
+                  {isSimulationHelpOpen ? (
+                    <div className="results-simulation-help-popover" role="note">
+                      Move the timeline to see projected spread over {Math.max(0, expectedSimulationFrames - 1)} week{expectedSimulationFrames - 1 === 1 ? '' : 's'} if no intervention is taken.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+              <span className="results-week-label">
+                {selectedWeek === 0 ? 'Current state' : `Week ${selectedWeek}`}
               </span>
             </div>
-            <input
-              type="range"
-              min="0"
-              max={maxSimulationWeek}
-              value={selectedWeek}
-              onChange={(e) => setSelectedWeek(Number(e.target.value))}
-              className="results-slider"
-              disabled={maxSimulationWeek === 0}
-            />
-          </div>
-        </div>
-      </section>
 
-      <section className="results-section">
-        <AgentChat result={result} />
-      </section>
+            <div className="results-simulation-image-wrap">
+              <img
+                src={simulationImage}
+                alt={`Simulation week ${selectedWeek}`}
+                className="results-simulation-image"
+              />
+            </div>
+
+            {simulationFrameStatus !== 'complete' ? (
+              <p className="results-simulation-status">
+                {simulationFrameStatus === 'error'
+                    ? 'Future simulation frames could not be prepared right now.'
+                    : 'Preparing future simulation frames...'}
+              </p>
+            ) : null}
+
+            <div className="results-slider-wrap">
+              <div className="results-slider-caption">
+                <span>Current state</span>
+                <span>
+                  {maxSimulationWeek === 0
+                    ? `Week ${Math.max(0, expectedSimulationFrames - 1)}`
+                    : `Week ${maxSimulationWeek}`}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max={maxSimulationWeek}
+                value={selectedWeek}
+                onChange={(e) => setSelectedWeek(Number(e.target.value))}
+                className="results-slider"
+                disabled={maxSimulationWeek === 0}
+              />
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <aside className="results-chat-column">
+        <div className="results-chat-sticky">
+          <AgentChat result={result} />
+        </div>
+      </aside>
     </div>
   )
 }
