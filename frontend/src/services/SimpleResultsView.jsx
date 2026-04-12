@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { fetchHistorySimulationFrames, fetchHistoryReport } from './api'
-import AgentChat from './AgentChat'
 
 function formatRiskHeading(risk) {
   if (!risk) return ['RISK AREA', 'SELECTED']
@@ -25,12 +24,6 @@ function getRecommendationHeading(risk) {
   if (risk === 'high') return 'Immediate Actions'
   if (risk === 'medium') return 'Preventive Actions'
   return 'Monitoring Actions'
-}
-
-function getRiskScoreLabel(risk) {
-  if (risk === 'high') return 'High risk range'
-  if (risk === 'medium') return 'Medium risk range'
-  return 'Low risk range'
 }
 
 function formatMetric(value, digits = 1) {
@@ -336,12 +329,14 @@ function buildExecutiveSummary(result) {
 }
 
 export default function SimpleResultsView({ result, onReportUpdate }) {
-  const heatmapWrapRef = useRef(null)
+  const heatmapOverlayRef = useRef(null)
+  const cellOverlayRef = useRef(null)
   const [selectedCell, setSelectedCell] = useState(null)
-  const [tooltipPosition, setTooltipPosition] = useState(null)
   const [selectedWeek, setSelectedWeek] = useState(0)
   const [detailView, setDetailView] = useState('overview')
   const [isSimulationHelpOpen, setIsSimulationHelpOpen] = useState(false)
+  const [overlayPosition, setOverlayPosition] = useState(null)
+  const [overlayAnchor, setOverlayAnchor] = useState(null)
   const [resolvedSimulationFrames, setResolvedSimulationFrames] = useState(() => (
     Array.isArray(result?.simulation_frames) && result.simulation_frames.length
       ? result.simulation_frames
@@ -453,48 +448,129 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
 
   const closeCellTooltip = () => {
     setSelectedCell(null)
-    setTooltipPosition(null)
-    setDetailView('overview')
+    setOverlayPosition(null)
+    setOverlayAnchor(null)
   }
 
   const handleSelectCell = (cell, event) => {
-    const heatmapNode = heatmapWrapRef.current
-    const cellNode = event.currentTarget
-
-    if (!heatmapNode || !cellNode) {
-      setSelectedCell(cell)
-      setTooltipPosition(null)
-      setDetailView('overview')
-      return
-    }
-
     if (selectedCell && selectedCell.x === cell.x && selectedCell.y === cell.y) {
       closeCellTooltip()
       return
     }
 
-    const heatmapRect = heatmapNode.getBoundingClientRect()
-    const cellRect = cellNode.getBoundingClientRect()
-    const tooltipWidth = 320
+    const overlayNode = heatmapOverlayRef.current
+    const cellNode = event?.currentTarget
+    const panelWidth = 320
+    const panelHeight = 260
     const gap = 12
-    const shouldShowLeft = cellRect.right - heatmapRect.left + gap + tooltipWidth > heatmapRect.width
+
+    if (overlayNode && cellNode) {
+      const overlayRect = overlayNode.getBoundingClientRect()
+      const cellRect = cellNode.getBoundingClientRect()
+      const relativeTop = cellRect.top - overlayRect.top
+      const relativeBottom = cellRect.bottom - overlayRect.top
+      const relativeLeft = cellRect.left - overlayRect.left
+      const relativeRight = cellRect.right - overlayRect.left
+      const cellWidth = cellRect.width
+      const cellHeight = cellRect.height
+
+      const showAbove =
+        relativeBottom > overlayRect.height * 0.55 ||
+        relativeBottom + panelHeight + gap > overlayRect.height
+      const showLeft = cell.x >= 3
+
+      setOverlayPosition({
+        top: showAbove
+          ? Math.max(12, relativeTop - panelHeight - gap)
+        : Math.min(
+          Math.max(12, overlayRect.height - panelHeight - 12),
+          relativeTop + cellHeight
+        ),
+        left: showLeft
+          ? Math.max(
+            12,
+            Math.min(
+              overlayRect.width - panelWidth - 12,
+              relativeLeft - cellWidth
+            )
+          )
+          : Math.min(
+            Math.max(12, overlayRect.width - panelWidth - 12),
+            relativeLeft + cellWidth
+          ),
+      })
+
+      setOverlayAnchor({
+        relativeTop,
+        relativeBottom,
+        relativeLeft,
+        relativeRight,
+        cellWidth,
+        cellHeight,
+        showLeft,
+      })
+    } else {
+      setOverlayPosition(null)
+      setOverlayAnchor(null)
+    }
 
     setSelectedCell(cell)
-    setTooltipPosition({
-      top: Math.min(
-        Math.max(12, cellRect.top - heatmapRect.top),
-        Math.max(12, heatmapRect.height - 220)
-      ),
-      left: shouldShowLeft
-        ? Math.max(12, cellRect.left - heatmapRect.left - tooltipWidth - gap)
-        : Math.min(
-          heatmapRect.width - tooltipWidth - 12,
-          cellRect.right - heatmapRect.left + gap
-        ),
-      side: shouldShowLeft ? 'left' : 'right',
-    })
-    setDetailView('overview')
   }
+
+  useLayoutEffect(() => {
+    const overlayNode = heatmapOverlayRef.current
+    const panelNode = cellOverlayRef.current
+
+    if (!selectedCell || !overlayAnchor || !overlayNode || !panelNode) {
+      return
+    }
+
+    const overlayRect = overlayNode.getBoundingClientRect()
+    const panelRect = panelNode.getBoundingClientRect()
+    const panelWidth = panelRect.width
+    const panelHeight = panelRect.height
+    const gap = 12
+    const cellHeight = overlayAnchor.cellHeight || 0
+    const showAbove =
+      overlayAnchor.relativeBottom > overlayRect.height * 0.55 ||
+      overlayAnchor.relativeBottom + panelHeight + gap > overlayRect.height
+    const showLeft = overlayAnchor.showLeft
+
+    const nextPosition = {
+      top: showAbove
+        ? Math.max(
+          12,
+          Math.min(
+            overlayRect.height - panelHeight - 12,
+            overlayAnchor.relativeTop - cellHeight
+          )
+        )
+        : Math.min(
+          Math.max(12, overlayRect.height - panelHeight - 12),
+          overlayAnchor.relativeTop + cellHeight
+        ),
+      left: showLeft
+        ? Math.max(
+          12,
+          Math.min(
+            overlayRect.width - panelWidth - 12,
+            overlayAnchor.relativeLeft - panelWidth - gap
+          )
+        )
+        : Math.min(
+          Math.max(12, overlayRect.width - panelWidth - 12),
+          overlayAnchor.relativeRight + gap
+        ),
+    }
+
+    setOverlayPosition((current) => (
+      current &&
+      current.top === nextPosition.top &&
+      current.left === nextPosition.left
+        ? current
+        : nextPosition
+    ))
+  }, [detailView, overlayAnchor, selectedCell])
 
   useEffect(() => {
     closeCellTooltip()
@@ -590,8 +666,8 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
   ])
 
   return (
-    <div className="results-page results-two-column-layout">
-      <div className="results-main-column">
+    <div className="simple-results-layout">
+      <div className="simple-results-main">
         <section className="results-page-intro">
           <p className="results-page-label">Analysis dashboard</p>
           <h1 className="results-title">Field Risk Overview</h1>
@@ -627,127 +703,150 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
         <section className="results-section">
           <h2 className="results-section-title">Infection Risk Map</h2>
 
-          <div className="results-map-column">
-            <div className="results-map-legend" aria-label="Heatmap legend">
-              <div className="results-map-legend-items">
-                <span className="results-map-legend-item">
-                  <span className="results-map-legend-swatch risk-high" />
-                  High risk
-                </span>
-                <span className="results-map-legend-item">
-                  <span className="results-map-legend-swatch risk-medium" />
-                  Medium risk
-                </span>
-                <span className="results-map-legend-item">
-                  <span className="results-map-legend-swatch risk-low" />
-                  Low risk
-                </span>
-                <span className="results-map-legend-item">
-                  <span className="results-map-legend-swatch risk-infected" />
-                  Blue dot = infected tree
-                </span>
-              </div>
-            </div>
-
-            <div className="results-image-block interactive" ref={heatmapWrapRef}>
-              <img
-                src={result.output_image}
-                alt="Generated heatmap"
-                className="results-image"
-              />
-
-              <div className="heatmap-grid-overlay">
-                {result.heatmap.map((cell, index) => {
-                  const isSelected =
-                    selectedCell &&
-                    selectedCell.x === cell.x &&
-                    selectedCell.y === cell.y
-
-                  return (
-                    <button
-                      key={index}
-                      type="button"
-                      className={`heatmap-grid-cell ${isSelected ? 'selected' : ''}`}
-                      onClick={(event) => handleSelectCell(cell, event)}
-                      aria-label={`Select heatmap cell row ${cell.y}, column ${cell.x}`}
-                    />
-                  )
-                })}
-              </div>
-
-              {selectedCell && tooltipPosition ? (
-                <div
-                  className={`results-cell-tooltip tooltip-${tooltipPosition.side}`}
-                  style={{
-                    top: `${tooltipPosition.top}px`,
-                    left: `${tooltipPosition.left}px`,
-                  }}
-                >
-                  <button
-                    type="button"
-                    className="results-cell-tooltip-close"
-                    onClick={closeCellTooltip}
-                    aria-label="Close risk details"
-                  >
-                    &times;
-                  </button>
-
-                  {detailView === 'overview' ? (
-                    <>
-                      <span className={`results-priority-kicker risk-${selectedCell.risk}`}>Priority</span>
-                      <h3 className="results-priority-heading">
-                        <span>{riskHeadingLines[0]}</span>
-                        <span>{riskHeadingLines[1]}</span>
-                      </h3>
-                      <p className="results-priority-message">{getRiskAdvisory(selectedCell.risk)}</p>
-
-                      <div className="results-detail-block">
-                        <h4>{getRecommendationHeading(selectedCell.risk)}</h4>
-                        <ul>
-                          {visibleActions.map((action, index) => (
-                            <li key={index}>{action}</li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      <div className="results-detail-block results-detail-footer">
-                        <button
-                          type="button"
-                          className="results-details-toggle button-secondary"
-                          onClick={() => setDetailView('details')}
-                        >
-                          Show supporting details
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="results-detail-block results-detail-block-first">
-                        <h4>Supporting Details</h4>
-                        <ul className="results-supporting-list">
-                          <li><strong>Latitude:</strong> {selectedCell.lat}</li>
-                          <li><strong>Longitude:</strong> {selectedCell.lon}</li>
-                          <li><strong>Temperature (C):</strong> {selectedCell.factors.temperature}</li>
-                          <li><strong>Humidity (%):</strong> {selectedCell.factors.humidity}</li>
-                          <li><strong>Soil moisture:</strong> {selectedCell.factors.soil_moisture}</li>
-                          <li><strong>Infected trees in this area:</strong> {selectedCell.detected_infected_trees}</li>
-                          <li><strong>Nearby infected tree:</strong> {selectedCell.infection_nearby ? 'Yes' : 'No'}</li>
-                        </ul>
-                      </div>
-
-                      <div className="results-detail-block results-detail-footer">
-                        <button
-                          type="button"
-                          className="results-details-toggle button-secondary"
-                          onClick={() => setDetailView('overview')}
-                        >
-                          Back to summary
-                        </button>
-                      </div>
-                    </>
-                  )}
+          <div className="simple-results-heatmap-stack">
+            <div className="simple-results-heatmap-visual">
+              <div className="results-map-legend" aria-label="Heatmap legend">
+                <div className="results-map-legend-items">
+                  <span className="results-map-legend-item">
+                    <span className="results-map-legend-swatch risk-high" />
+                    High risk
+                  </span>
+                  <span className="results-map-legend-item">
+                    <span className="results-map-legend-swatch risk-medium" />
+                    Medium risk
+                  </span>
+                  <span className="results-map-legend-item">
+                    <span className="results-map-legend-swatch risk-low" />
+                    Low risk
+                  </span>
+                  <span className="results-map-legend-item">
+                    <span className="results-map-legend-swatch risk-infected" />
+                    Blue dot = infected tree
+                  </span>
                 </div>
-              ) : null}
+              </div>
+
+              <div className="results-image-block interactive" ref={heatmapOverlayRef}>
+                <img
+                  src={result.output_image}
+                  alt="Generated heatmap"
+                  className="results-image"
+                />
+
+                <div className="heatmap-grid-overlay">
+                  {result.heatmap.map((cell, index) => {
+                    const isSelected =
+                      selectedCell &&
+                      selectedCell.x === cell.x &&
+                      selectedCell.y === cell.y
+
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        className={`heatmap-grid-cell ${isSelected ? 'selected' : ''}`}
+                        onClick={(event) => handleSelectCell(cell, event)}
+                        aria-label={`Select heatmap cell row ${cell.y}, column ${cell.x}`}
+                      />
+                    )
+                  })}
+                </div>
+
+                {selectedCell ? (
+                  <div
+                    ref={cellOverlayRef}
+                    className="simple-results-cell-overlay"
+                    style={{
+                      top: `${overlayPosition?.top ?? 12}px`,
+                      left: `${overlayPosition?.left ?? 12}px`,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="simple-results-cell-overlay-close"
+                      onClick={closeCellTooltip}
+                      aria-label="Close risk details"
+                    >
+                      &times;
+                    </button>
+
+                    <div className="simple-results-cell-overlay-inner">
+                      {detailView === 'overview' ? (
+                        <>
+                          <span className={`results-priority-kicker risk-${selectedCell.risk}`}>Priority</span>
+                          <h3 className="results-priority-heading">
+                            <span>{riskHeadingLines[0]}</span>
+                            <span>{riskHeadingLines[1]}</span>
+                          </h3>
+                          <p className="results-priority-message">{getRiskAdvisory(selectedCell.risk)}</p>
+
+                          <div className="simple-results-cell-highlights">
+                            <span className="simple-results-cell-highlight">
+                              {selectedCell.detected_infected_trees} tree{selectedCell.detected_infected_trees === 1 ? '' : 's'} detected
+                            </span>
+                            <span className="simple-results-cell-highlight">
+                              Nearby infection: {selectedCell.infection_nearby ? 'Yes' : 'No'}
+                            </span>
+                          </div>
+
+                          <div className="results-detail-block">
+                            <h4>Why this area was assigned</h4>
+                            <ul>
+                              {visibleNarrative.map((item, index) => (
+                                <li key={index}>{item}</li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          <div className="results-detail-block">
+                            <h4>{getRecommendationHeading(selectedCell.risk)}</h4>
+                            <ul>
+                              {visibleActions.map((action, index) => (
+                                <li key={index}>{action}</li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          <div className="results-detail-block results-detail-footer">
+                            <button
+                              type="button"
+                              className="results-details-toggle button-secondary"
+                              onClick={() => setDetailView('details')}
+                            >
+                              Show supporting details
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="results-detail-block results-detail-block-first">
+                            <h4>Supporting Details</h4>
+                            <ul className="results-supporting-list">
+                              <li><strong>Latitude:</strong> {selectedCell.lat}</li>
+                              <li><strong>Longitude:</strong> {selectedCell.lon}</li>
+                              <li><strong>Temperature:</strong> {selectedCell.factors.temperature} C</li>
+                              <li><strong>Humidity:</strong> {selectedCell.factors.humidity}%</li>
+                              <li><strong>Soil moisture:</strong> {selectedCell.factors.soil_moisture}</li>
+                              <li><strong>Infected trees in this area:</strong> {selectedCell.detected_infected_trees}</li>
+                              <li><strong>Nearby infected tree:</strong> {selectedCell.infection_nearby ? 'Yes' : 'No'}</li>
+                            </ul>
+                          </div>
+
+                          <div className="results-detail-block results-detail-footer">
+                            <button
+                              type="button"
+                              className="results-details-toggle button-secondary"
+                              onClick={() => setDetailView('overview')}
+                            >
+                              Back to summary
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
         </section>
@@ -782,13 +881,11 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
               </span>
             </div>
 
-            <div className="results-simulation-image-wrap">
-              <img
-                src={simulationImage}
-                alt={`Simulation week ${selectedWeek}`}
-                className="results-simulation-image"
-              />
-            </div>
+            <img
+              src={simulationImage}
+              alt={`Simulation week ${selectedWeek}`}
+              className="results-simulation-image"
+            />
 
             {simulationFrameStatus !== 'complete' ? (
               <p className="results-simulation-status">
@@ -820,12 +917,6 @@ export default function SimpleResultsView({ result, onReportUpdate }) {
           </div>
         </section>
       </div>
-
-      <aside className="results-chat-column">
-        <div className="results-chat-sticky">
-          <AgentChat result={result} />
-        </div>
-      </aside>
     </div>
   )
 }

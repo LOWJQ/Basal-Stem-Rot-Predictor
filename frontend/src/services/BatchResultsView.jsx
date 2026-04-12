@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import AgentChat from './AgentChat'
 import SimpleResultsView from './SimpleResultsView'
 import ReportPreviewView from './ReportPreviewView'
 
@@ -81,6 +82,40 @@ export default function BatchResultsView({
     onSelectHistory(nextResult.history_id)
   }
 
+  const pagination = (
+    <nav className="batch-pagination" aria-label="Batch results pagination">
+      <button
+        type="button"
+        className="batch-pagination-link previous"
+        onClick={() => goToPage(Math.max(1, currentPage - 1))}
+        disabled={currentPage === 1}
+      >
+        Previous
+      </button>
+
+      {visiblePages.map((page) => (
+        <button
+          key={page}
+          type="button"
+          className={`batch-pagination-link ${page === currentPage ? 'active' : ''}`}
+          onClick={() => goToPage(page)}
+          aria-current={page === currentPage ? 'page' : undefined}
+        >
+          {page}
+        </button>
+      ))}
+
+      <button
+        type="button"
+        className="batch-pagination-link next"
+        onClick={() => goToPage(Math.min(totalPages, currentPage + 1))}
+        disabled={currentPage === totalPages}
+      >
+        Next
+      </button>
+    </nav>
+  )
+
   return (
     <div className="batch-results-page dashboard-page">
       <div className="results-tabbar" role="tablist" aria-label="Result views">
@@ -105,41 +140,25 @@ export default function BatchResultsView({
         </button>
       </div>
 
-      {resultViewMode === 'report' && effectiveReport
-        ? <ReportPreviewView report={effectiveReport} historyId={currentResult.history_id} />
-        : <SimpleResultsView result={currentResult} onReportUpdate={handleReportUpdate} />}
+      {resultViewMode === 'report' && effectiveReport ? (
+        <>
+          <ReportPreviewView report={effectiveReport} historyId={currentResult.history_id} />
+          {pagination}
+        </>
+      ) : (
+        <div className="analysis-results-shell">
+          <div className="analysis-results-main">
+            <SimpleResultsView result={currentResult} onReportUpdate={handleReportUpdate} />
+            {pagination}
+          </div>
 
-      <nav className="batch-pagination" aria-label="Batch results pagination">
-        <button
-          type="button"
-          className="batch-pagination-link previous"
-          onClick={() => goToPage(Math.max(1, currentPage - 1))}
-          disabled={currentPage === 1}
-        >
-          Previous
-        </button>
-
-        {visiblePages.map((page) => (
-          <button
-            key={page}
-            type="button"
-            className={`batch-pagination-link ${page === currentPage ? 'active' : ''}`}
-            onClick={() => goToPage(page)}
-            aria-current={page === currentPage ? 'page' : undefined}
-          >
-            {page}
-          </button>
-        ))}
-
-        <button
-          type="button"
-          className="batch-pagination-link next"
-          onClick={() => goToPage(Math.min(totalPages, currentPage + 1))}
-          disabled={currentPage === totalPages}
-        >
-          Next
-        </button>
-      </nav>
+          <aside className="analysis-results-chat">
+            <div className="analysis-results-chat-inner">
+              <AgentChat result={currentResult} />
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   )
 }

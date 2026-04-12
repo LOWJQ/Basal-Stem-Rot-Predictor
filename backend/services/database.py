@@ -94,13 +94,47 @@ def _deserialize_scan(row, include_payload=False):
     return scan
 
 
-def get_history(limit=20, device_id=None):
+def get_history(limit=20, device_id=None, include_payload=False):
     with _connect(sqlite3.Row) as conn:
         rows = conn.execute(
             "SELECT * FROM scans WHERE device_id = ? ORDER BY timestamp DESC LIMIT ?",
             (device_id, limit)
         ).fetchall()
-        return [_deserialize_scan(row) for row in rows]
+        return [_deserialize_scan(row, include_payload=include_payload) for row in rows]
+
+
+def get_plot_history(
+    *,
+    lat,
+    lon,
+    device_id=None,
+    limit=20,
+    tolerance=0.0001,
+    include_payload=False,
+    exclude_scan_id=None,
+):
+    if lat is None or lon is None:
+        return get_history(limit=limit, device_id=device_id, include_payload=include_payload)
+
+    query = """
+        SELECT *
+        FROM scans
+        WHERE device_id = ?
+          AND ABS(lat - ?) <= ?
+          AND ABS(lon - ?) <= ?
+    """
+    params = [device_id, lat, tolerance, lon, tolerance]
+
+    if exclude_scan_id is not None:
+        query += " AND id != ?"
+        params.append(exclude_scan_id)
+
+    query += " ORDER BY timestamp DESC LIMIT ?"
+    params.append(limit)
+
+    with _connect(sqlite3.Row) as conn:
+        rows = conn.execute(query, tuple(params)).fetchall()
+        return [_deserialize_scan(row, include_payload=include_payload) for row in rows]
 
 
 def get_scan(scan_id):

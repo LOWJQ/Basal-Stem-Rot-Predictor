@@ -1,12 +1,14 @@
 import json
 import time
 import os
+from datetime import datetime
 
 try:
-    import google.generativeai as genai
+    from google import genai
 except ImportError:
     genai = None
 from flask import Blueprint, Response, jsonify, request, stream_with_context
+from services.database import get_plot_history
 
 agent_bp = Blueprint("agent", __name__)
 
@@ -46,6 +48,92 @@ def _extract_recommendations(report):
         if item and item not in combined:
             combined.append(item)
     return combined
+
+
+def _safe_json(value):
+    try:
+        return json.dumps(value, ensure_ascii=False)
+    except TypeError:
+        return json.dumps(str(value), ensure_ascii=False)
+
+
+def _format_scan_timestamp(value):
+    if not value:
+        return "Unknown date"
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).strftime("%Y-%m-%d")
+    except ValueError:
+        return str(value)
+
+
+def _build_scan_summary_entry(scan):
+    payload = scan.get("payload") or {}
+    report = payload.get("report") or {}
+    summary = report.get("summary") or {}
+    key_findings = report.get("key_findings") or []
+
+    findings_text = "; ".join(str(item) for item in key_findings[:3]) or "No major findings recorded."
+
+    return {
+        "scan_date": _format_scan_timestamp(scan.get("timestamp")),
+        "risk_score": summary.get("average_risk_score", scan.get("avg_risk_score")),
+        "infected_tree_count": summary.get("infected_tree_count", scan.get("infected_count", 0)),
+        "key_findings": findings_text,
+    }
+
+
+def _build_plot_scan_history(*, current_scan, device_id, history_id=None):
+    report = (current_scan or {}).get("report") or {}
+    location = report.get("location") or {}
+    lat = location.get("lat")
+    lon = location.get("lon")
+
+    plot_scans = get_plot_history(
+        lat=lat,
+        lon=lon,
+        device_id=device_id,
+        limit=20,
+        include_payload=True,
+        exclude_scan_id=history_id,
+    )
+
+    return [_build_scan_summary_entry(scan) for scan in plot_scans]
+
+
+def _trim_conversation(conversation, user_message, limit=8):
+    if not isinstance(conversation, list):
+        conversation = []
+
+    trimmed = []
+    for entry in conversation:
+        role = str((entry or {}).get("role") or "").strip().lower()
+        text = str((entry or {}).get("text") or "").strip()
+        if role not in {"user", "agent"} or not text:
+            continue
+        trimmed.append({"role": role, "text": text})
+
+    if trimmed and trimmed[-1]["role"] == "user" and trimmed[-1]["text"] == user_message:
+        trimmed = trimmed[:-1]
+
+    return trimmed[-limit:]
+
+
+def _build_current_scan_context(current_scan):
+    if not isinstance(current_scan, dict):
+        return {}
+
+    return {
+        "history_id": current_scan.get("history_id"),
+        "title": current_scan.get("title"),
+        "image_size": current_scan.get("image_size"),
+        "infected_points": current_scan.get("infected_points"),
+        "heatmap": current_scan.get("heatmap"),
+        "heatmap_grid": current_scan.get("heatmap_grid"),
+        "grid_coordinates": current_scan.get("grid_coordinates"),
+        "environment_summary": current_scan.get("environment_summary"),
+        "report": current_scan.get("report"),
+        "suggested_questions": current_scan.get("suggested_questions"),
+    }
 
 
 def _build_local_agent_reply(user_message, report, environment, infected_count):
@@ -125,54 +213,84 @@ def _build_local_agent_reply(user_message, report, environment, infected_count):
 def get_gemini_model():
     if genai is None:
         raise RuntimeError(
-            "google-generativeai is not installed. Run `python -m pip install -r requirements.txt` in the backend directory."
+            "google-genai is not installed. Run `pip install google-genai` in the backend directory."
         )
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not configured for the backend.")
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-1.5-flash")
+    client = genai.Client(api_key=api_key)
+    return client
 
 
 @agent_bp.route("/agent-chat", methods=["POST"])
 def agent_chat():
     body = request.get_json(silent=True) or {}
+    device_id = request.headers.get("X-Device-Id", "unknown")
     user_message = body.get("message", "").strip()
     report = body.get("report") or {}
     environment = body.get("environment_summary") or {}
     infected_count = int(body.get("infected_count", 0))
+    current_scan = body.get("current_scan") or {}
+    conversation = body.get("conversation") or []
+    history_id = body.get("history_id")
 
     if not user_message:
         return jsonify({"error": "No message provided"}), 400
 
+    if current_scan:
+        report = current_scan.get("report") or report
+        environment = current_scan.get("environment_summary") or environment
+        current_infected_points = current_scan.get("infected_points")
+        if isinstance(current_infected_points, list):
+            infected_count = len(current_infected_points)
+        history_id = current_scan.get("history_id", history_id)
+
     summary = report.get("summary") or {}
     key_findings = report.get("key_findings") or []
     recommendations = _extract_recommendations(report)
+    plot_scan_history = _build_plot_scan_history(
+        current_scan=current_scan,
+        device_id=device_id,
+        history_id=history_id,
+    )
+    recent_conversation = _trim_conversation(conversation, user_message, limit=8)
+    current_scan_context = _build_current_scan_context(current_scan)
 
-    system_prompt = f"""You are PalmGuard AI, an expert AI agent specialising in palm oil Basal Stem Rot (BSR) disease analysis for Malaysian plantations. You have autonomously completed a full drone image analysis.
+    system_prompt = f"""You are PalmGuard AI, an expert assistant for palm oil Basal Stem Rot (BSR) monitoring.
 
-CURRENT SCAN DATA:
-- Infected trees detected: {infected_count}
-- Average risk score: {summary.get("average_risk_score", "N/A")}
-- Risk band: {summary.get("risk_band", "N/A")}
-- High risk grid cells: {summary.get("high_risk_cells", 0)}
-- Medium risk grid cells: {summary.get("medium_risk_cells", 0)}
-- Average humidity: {environment.get("avg_humidity", "N/A")}%
-- Average soil moisture: {environment.get("avg_soil_moisture", "N/A")}
-- Average temperature: {environment.get("avg_temperature", "N/A")}C
-- Estimated yield at risk: {summary.get("estimated_yield_at_risk_tonnes", 0)} tonnes CPO
-- Key findings: {key_findings}
-- Recommended actions: {recommendations}
+Use three context layers only:
+1. Summarised past scans for this plot.
+2. Only the recent conversation messages shown below.
+3. The full structured data for the current scan.
+
+SUMMARISED PAST SCANS FOR THIS PLOT:
+{_safe_json(plot_scan_history)}
+
+RECENT CONVERSATION (LAST {len(recent_conversation)} MESSAGES):
+{_safe_json(recent_conversation)}
+
+FULL CURRENT SCAN DATA:
+{_safe_json(current_scan_context or {
+    "infected_trees_detected": infected_count,
+    "environment_summary": environment,
+    "report_summary": summary,
+    "key_findings": key_findings,
+    "recommended_actions": recommendations,
+})}
 
 INSTRUCTIONS:
-- Answer only about this specific scan's data above.
+- Answer as if you remember the plot history, but rely only on the context provided above.
+- Focus on the current scan unless the user asks for comparison or trend.
 - Be direct, concise, and actionable.
 - Use plain English. No markdown headers. Max 3 short paragraphs.
 - If asked something unrelated to this scan or palm oil disease, politely redirect."""
 
     try:
-        model = get_gemini_model()
-        response = model.generate_content(f"{system_prompt}\n\nUser: {user_message}")
+        client = get_gemini_model()
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=f"{system_prompt}\n\nUser: {user_message}"
+        )
         reply_text = getattr(response, "text", None)
         if reply_text and reply_text.strip():
             return jsonify({"reply": reply_text.strip()})

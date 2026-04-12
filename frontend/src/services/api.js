@@ -1,4 +1,4 @@
-function getDeviceId() {
+export function getDeviceId() {
   let id = localStorage.getItem('bsr_device_id')
   if (!id) {
     id = crypto.randomUUID()

@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 from flask import Blueprint, jsonify, request
 
+from services.database import get_plot_history
 from services.database import save_scan
 from services.env_interpolation import (
     apply_infection_env_variation,
@@ -37,6 +38,51 @@ SOURCE_DIR = os.path.join(OUTPUT_DIR, "sources")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(SOURCE_DIR, exist_ok=True)
+
+
+def _generate_suggested_questions(*, report, environment_summary, previous_scan=None):
+    summary = report.get("summary") or {}
+    questions = []
+
+    soil_moisture = float(environment_summary.get("avg_soil_moisture") or 0)
+    infected_count = int(summary.get("infected_tree_count") or 0)
+    current_risk_score = float(summary.get("average_risk_score") or 0)
+    high_risk_zones = int(summary.get("high_risk_cells") or 0)
+
+    previous_payload = (previous_scan or {}).get("payload") or {}
+    previous_report = previous_payload.get("report") or {}
+    previous_summary = previous_report.get("summary") or {}
+    previous_risk_score = previous_summary.get("average_risk_score")
+
+    if soil_moisture >= 0.2:
+        questions.append("Will the current soil moisture make fungal persistence worse in this plot?")
+
+    if infected_count > 0:
+        questions.append("What immediate isolation or treatment action should I take for the infected trees?")
+
+    try:
+        if previous_risk_score is not None and current_risk_score > float(previous_risk_score):
+            questions.append("Why is the risk score worsening compared with the last scan?")
+    except (TypeError, ValueError):
+        pass
+
+    if high_risk_zones > 4:
+        questions.append("Which high-risk zones should I prioritise first?")
+
+    fallback_questions = [
+        "What is the most urgent action I should take from this scan?",
+        "Which environmental factor is contributing most to the current risk?",
+        "How likely is this infection to spread if I do nothing this week?",
+        "What should I monitor before the next scan?",
+    ]
+
+    for question in fallback_questions:
+        if len(questions) >= 4:
+            break
+        if question not in questions:
+            questions.append(question)
+
+    return questions[:4]
 
 
 @predict_bp.route("/predict", methods=["GET", "POST"])
@@ -227,6 +273,21 @@ def predict():
             image_width=width,
             image_height=height,
             generated_at=datetime.utcnow().isoformat(),
+        )
+
+        previous_plot_scans = get_plot_history(
+            lat=lat,
+            lon=lon,
+            device_id=device_id,
+            limit=1,
+            include_payload=True,
+        )
+        previous_scan = previous_plot_scans[0] if previous_plot_scans else None
+
+        response_data["suggested_questions"] = _generate_suggested_questions(
+            report=response_data["report"],
+            environment_summary=environment_summary,
+            previous_scan=previous_scan,
         )
 
         scan_id = save_scan(
