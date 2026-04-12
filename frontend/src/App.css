@@ -2621,3 +2621,194 @@ html[data-view='analysis'] #landing-page {
     top: 12px !important;
   }
 }
+
+.lands-page {
+  gap: 28px;
+}
+
+.lands-header,
+.land-detail-placeholder,
+.lands-empty-state,
+.lands-list {
+  width: min(100%, 920px);
+}
+
+.lands-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.lands-header .dashboard-page-title,
+.land-detail-placeholder .dashboard-page-title {
+  margin: 0;
+}
+
+.lands-add-button {
+  padding: 11px 16px;
+  width: auto !important;
+  text-align: left;
+}
+
+.lands-list {
+  display: grid;
+  gap: 16px;
+}
+
+.land-card {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px 24px;
+  border: 1px solid var(--card-border);
+  border-radius: 18px;
+  background: var(--card-bg);
+  color: var(--charcoal);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.land-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(26, 58, 31, 0.14);
+  box-shadow: 0 12px 28px rgba(26, 58, 31, 0.08);
+}
+
+.land-card-title-row,
+.land-card-title-wrap,
+.land-card-meta {
+  display: flex;
+  align-items: center;
+}
+
+.land-card-title-row {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.land-card-title-wrap {
+  gap: 10px;
+  min-width: 0;
+  color: var(--olive);
+}
+
+.land-card-title {
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--charcoal);
+}
+
+.land-card-title.untitled {
+  color: var(--landing-muted);
+  font-style: italic;
+}
+
+.land-card-meta {
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--landing-muted);
+  font-size: 14px;
+}
+
+.land-card-meta span + span::before {
+  content: "·";
+  margin-right: 8px;
+}
+
+.land-risk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.land-risk-badge.high {
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--red);
+}
+
+.land-risk-badge.medium {
+  background: rgba(217, 119, 6, 0.08);
+  color: #b45309;
+}
+
+.land-risk-badge.low {
+  background: rgba(22, 163, 74, 0.08);
+  color: var(--green);
+}
+
+.lands-empty-state,
+.land-detail-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 28px 30px;
+  border: 1px solid var(--card-border);
+  border-radius: 20px;
+  background: var(--card-bg);
+}
+
+.lands-empty-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--charcoal);
+}
+
+.lands-empty-copy {
+  margin: 0;
+  color: var(--landing-muted);
+  font-size: 15px;
+}
+
+.land-detail-back {
+  min-width: 0;
+}
+
+.upload-page-topbar,
+.upload-page-header {
+  width: min(100%, 980px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.upload-page-topbar {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 8px;
+}
+
+.upload-back-button {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .land-card {
+    padding: 18px 18px 20px;
+  }
+
+  .land-card-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .land-card-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .land-card-meta span + span::before {
+    content: "";
+    margin-right: 0;
+  }
+}

@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import {
   LoaderCircle,
-  MessageSquare,
-  MoreHorizontal,
   Settings,
-  Trash2,
+  MapPinned,
+  Plus,
 } from 'lucide-react'
 import UploadSection from '../services/UploadSection'
 import SimpleResultsView from '../services/SimpleResultsView'
@@ -12,10 +11,8 @@ import AgentChat from '../services/AgentChat'
 import AgentStream from '../services/AgentStream'
 import {
   deleteAllHistoryScans,
-  deleteHistoryScan,
   fetchHistory,
-  fetchHistoryReport,
-  fetchHistoryScan,
+  fetchLands,
   predictScan,
 } from '../services/api'
 
@@ -32,54 +29,57 @@ function buildAnalysisFormData(entry) {
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false)
+  const [isLandsLoading, setIsLandsLoading] = useState(true)
   const [isHistoryLoading, setIsHistoryLoading] = useState(true)
-  const [isOpeningHistory, setIsOpeningHistory] = useState(false)
   const [error, setError] = useState('')
-  const [historyError, setHistoryError] = useState('')
   const [historyItems, setHistoryItems] = useState([])
-  const [selectedHistoryId, setSelectedHistoryId] = useState(null)
+  const [lands, setLands] = useState([])
+  const [selectedLandId, setSelectedLandId] = useState(null)
+  const [isAddingLand, setIsAddingLand] = useState(false)
   const [currentResult, setCurrentResult] = useState(null)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isDeletingAllHistory, setIsDeletingAllHistory] = useState(false)
-  const [historyActionLoadingId, setHistoryActionLoadingId] = useState(null)
-  const [openMenuId, setOpenMenuId] = useState(null)
-  const [deleteTarget, setDeleteTarget] = useState(null)
   const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState(false)
   const [agentStreamData, setAgentStreamData] = useState(null)
   const [showAgentStream, setShowAgentStream] = useState(false)
 
+  const loadLands = async () => {
+    try {
+      setIsLandsLoading(true)
+      const response = await fetchLands()
+      setLands(response.lands || [])
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLandsLoading(false)
+    }
+  }
+
   const loadHistory = async () => {
     try {
       setIsHistoryLoading(true)
-      setHistoryError('')
       const response = await fetchHistory()
       setHistoryItems(response.scans || [])
-    } catch (err) {
-      setHistoryError(err.message)
+    } catch {
+      setHistoryItems([])
     } finally {
       setIsHistoryLoading(false)
     }
   }
 
   useEffect(() => {
+    loadLands()
     loadHistory()
-  }, [])
-
-  useEffect(() => {
-    const handleWindowClick = () => setOpenMenuId(null)
-    window.addEventListener('click', handleWindowClick)
-    return () => window.removeEventListener('click', handleWindowClick)
   }, [])
 
   const resetToNewAnalysis = () => {
     setAgentStreamData(null)
     setShowAgentStream(false)
     setCurrentResult(null)
-    setSelectedHistoryId(null)
+    setSelectedLandId(null)
+    setIsAddingLand(true)
     setError('')
     setIsLoading(false)
-    setIsOpeningHistory(false)
-    setOpenMenuId(null)
   }
 
   const handleAnalyzeImage = async (entry) => {
@@ -87,7 +87,7 @@ export default function Home() {
       setIsLoading(true)
       setError('')
       setCurrentResult(null)
-      setSelectedHistoryId(null)
+      setSelectedLandId(null)
       setAgentStreamData(null)
       setShowAgentStream(false)
 
@@ -95,52 +95,16 @@ export default function Home() {
       const result = response.data
 
       setCurrentResult(result)
-      setSelectedHistoryId(result?.history_id ?? null)
+      setIsAddingLand(false)
       setAgentStreamData(result)
       setShowAgentStream(true)
 
+      await loadLands()
       await loadHistory()
     } catch (err) {
       setError(err.message || 'Analysis failed. Please try again.')
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  const handleOpenHistory = async (scanId) => {
-    try {
-      setIsOpeningHistory(true)
-      setError('')
-      setAgentStreamData(null)
-      setShowAgentStream(false)
-
-      const detailResponse = await fetchHistoryScan(scanId)
-      const detail = { ...detailResponse.scan }
-
-      if (detail.payload && !detail.payload.report) {
-        try {
-          const reportResponse = await fetchHistoryReport(scanId)
-          detail.payload = { ...detail.payload, report: reportResponse.report }
-        } catch {
-          // Older scans may not have report data yet.
-        }
-      }
-
-      if (!detail.payload) {
-        throw new Error('Saved analysis payload is unavailable for this scan.')
-      }
-
-      setCurrentResult({
-        ...detail.payload,
-        history_id: detail.id,
-        title: detail.title,
-        timestamp: detail.timestamp,
-      })
-      setSelectedHistoryId(detail.id)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setIsOpeningHistory(false)
     }
   }
 
@@ -153,9 +117,6 @@ export default function Home() {
       await loadHistory()
 
       setCurrentResult(null)
-      setSelectedHistoryId(null)
-      setDeleteTarget(null)
-      setOpenMenuId(null)
       setIsDeleteAllConfirmOpen(false)
       setIsSettingsOpen(false)
     } catch (err) {
@@ -165,51 +126,58 @@ export default function Home() {
     }
   }
 
-  const handleToggleMenu = (event, scanId) => {
-    event.stopPropagation()
-    setOpenMenuId((current) => (current === scanId ? null : scanId))
-  }
+  const formatRelativeTime = (value) => {
+    if (!value) return 'No scans yet'
 
-  const handleRequestDeleteScan = (event, scan) => {
-    event.stopPropagation()
-    setOpenMenuId(null)
-    setDeleteTarget(scan)
-  }
+    const timestamp = new Date(value).getTime()
+    if (Number.isNaN(timestamp)) return 'Unknown'
 
-  const handleConfirmDeleteScan = async () => {
-    if (!deleteTarget) return
+    const diffMs = Date.now() - timestamp
+    const minute = 60 * 1000
+    const hour = 60 * minute
+    const day = 24 * hour
+    const week = 7 * day
+    const month = 30 * day
 
-    try {
-      setHistoryActionLoadingId(deleteTarget.id)
-      await deleteHistoryScan(deleteTarget.id)
-      await loadHistory()
-
-      if (selectedHistoryId === deleteTarget.id) {
-        setCurrentResult(null)
-        setSelectedHistoryId(null)
-      }
-
-      setDeleteTarget(null)
-      setOpenMenuId(null)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setHistoryActionLoadingId(null)
+    if (diffMs < hour) {
+      const minutes = Math.max(1, Math.round(diffMs / minute))
+      return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
     }
+
+    if (diffMs < day) {
+      const hours = Math.round(diffMs / hour)
+      return `${hours} hour${hours === 1 ? '' : 's'} ago`
+    }
+
+    if (diffMs < week) {
+      const days = Math.round(diffMs / day)
+      return `${days} day${days === 1 ? '' : 's'} ago`
+    }
+
+    if (diffMs < month) {
+      const weeks = Math.round(diffMs / week)
+      return `${weeks} week${weeks === 1 ? '' : 's'} ago`
+    }
+
+    const months = Math.round(diffMs / month)
+    return `${months} month${months === 1 ? '' : 's'} ago`
+  }
+
+  const getRiskMeta = (land) => {
+    const score = Number(land?.latest_risk_score ?? 0)
+
+    if (score >= 66) {
+      return { label: 'High', icon: '🔴', className: 'high' }
+    }
+
+    if (score >= 33) {
+      return { label: 'Medium', icon: '🟡', className: 'medium' }
+    }
+
+    return { label: 'Low', icon: '🟢', className: 'low' }
   }
 
   const renderMainContent = () => {
-    if (isOpeningHistory) {
-      return (
-        <section className="dashboard-page dashboard-state-page">
-          <div className="dashboard-state-panel">
-            <LoaderCircle className="history-loading-icon" />
-            <p>Opening saved analysis...</p>
-          </div>
-        </section>
-      )
-    }
-
     if (showAgentStream && agentStreamData) {
       return (
         <section className="dashboard-page dashboard-state-page">
@@ -248,24 +216,147 @@ export default function Home() {
       )
     }
 
-    return (
-      <section className="dashboard-page upload-page">
-        <div className="dashboard-page-header">
-          <p className="dashboard-page-label">Palm Oil Disease Analysis</p>
-          <h1 className="dashboard-page-title">From detection to decision in one scan</h1>
-          <div className="upload-page-badge-row">
-            <span className="upload-page-badge">AI-powered prediction</span>
-            <span className="upload-page-badge-text">
-              YOLO-V8-based infected tree detection combined with live environmental data
-            </span>
+    if (isAddingLand) {
+      return (
+        <section className="dashboard-page upload-page">
+          <div className="upload-page-topbar">
+            <button
+              type="button"
+              className="button-secondary upload-back-button"
+              onClick={() => {
+                setIsAddingLand(false)
+                setError('')
+              }}
+            >
+              {'<- Back'}
+            </button>
           </div>
+
+          <div className="dashboard-page-header upload-page-header">
+            <p className="dashboard-page-label">Palm Oil Disease Analysis</p>
+            <h1 className="dashboard-page-title">From detection to decision in one scan</h1>
+            <div className="upload-page-badge-row">
+              <span className="upload-page-badge">AI-powered prediction</span>
+              <span className="upload-page-badge-text">
+                YOLO-V8-based infected tree detection combined with live environmental data
+              </span>
+            </div>
+          </div>
+
+          <UploadSection
+            onAnalyze={handleAnalyzeImage}
+            isLoading={isLoading}
+            error={error}
+          />
+        </section>
+      )
+    }
+
+    if (selectedLandId !== null) {
+      const selectedLand = lands.find((land) => land.id === selectedLandId)
+
+      return (
+        <section className="dashboard-page lands-page">
+          <div className="land-detail-placeholder">
+            <button
+              type="button"
+              className="button-secondary land-detail-back"
+              onClick={() => setSelectedLandId(null)}
+            >
+              {'<- Back'}
+            </button>
+            <p className="dashboard-page-label">Plantation land</p>
+            <h1 className="dashboard-page-title">
+              {selectedLand?.name || 'Unnamed Land'}
+            </h1>
+            <p className="dashboard-page-description">Land Detail — coming in next step</p>
+          </div>
+        </section>
+      )
+    }
+
+    if (isLandsLoading) {
+      return (
+        <section className="dashboard-page dashboard-state-page">
+          <div className="dashboard-state-panel">
+            <LoaderCircle className="history-loading-icon" />
+            <p>Loading plantation lands...</p>
+          </div>
+        </section>
+      )
+    }
+
+    if (!lands.length) {
+      return (
+        <section className="dashboard-page lands-page">
+          <div className="lands-header">
+            <p className="dashboard-page-label">Plantation overview</p>
+            <h1 className="dashboard-page-title">My Plantation Lands</h1>
+          </div>
+
+          <div className="lands-empty-state">
+            <p className="lands-empty-title">You have no plantation lands yet.</p>
+            <p className="lands-empty-copy">Upload your first image to get started.</p>
+            <button
+              type="button"
+              className="button-dark sidebar-new lands-add-button"
+              onClick={resetToNewAnalysis}
+            >
+              <Plus size={16} />
+              <span>Add New Land</span>
+            </button>
+          </div>
+        </section>
+      )
+    }
+
+    return (
+      <section className="dashboard-page lands-page">
+        <div className="lands-header">
+          <p className="dashboard-page-label">Plantation overview</p>
+          <h1 className="dashboard-page-title">My Plantation Lands</h1>
+          <button
+            type="button"
+            className="button-dark sidebar-new lands-add-button"
+            onClick={resetToNewAnalysis}
+          >
+            <Plus size={16} />
+            <span>Add New Land</span>
+          </button>
         </div>
 
-        <UploadSection
-          onAnalyze={handleAnalyzeImage}
-          isLoading={isLoading}
-          error={error}
-        />
+        <div className="lands-list">
+          {lands.map((land) => {
+            const riskMeta = getRiskMeta(land)
+            const landName = land.name || 'Unnamed Land'
+
+            return (
+              <button
+                key={land.id}
+                type="button"
+                className="land-card"
+                onClick={() => setSelectedLandId(land.id)}
+              >
+                <div className="land-card-title-row">
+                  <div className="land-card-title-wrap">
+                    <MapPinned size={18} />
+                    <span className={`land-card-title ${land.name ? '' : 'untitled'}`}>
+                      {landName}
+                    </span>
+                  </div>
+                  <span className={`land-risk-badge ${riskMeta.className}`}>
+                    {riskMeta.icon} {riskMeta.label}
+                  </span>
+                </div>
+
+                <div className="land-card-meta">
+                  <span>{land.scan_count || 0} scans</span>
+                  <span>Last scan: {formatRelativeTime(land.last_scan_at)}</span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
       </section>
     )
   }
@@ -281,65 +372,9 @@ export default function Home() {
           </div>
 
           <button className="sidebar-new button-dark" type="button" onClick={resetToNewAnalysis}>
-            <span>New Analysis</span>
+            <Plus size={16} />
+            <span>Add New Land</span>
           </button>
-
-          <div className="sidebar-section">
-            <div className="sidebar-label">RECENT</div>
-
-            <div className="sidebar-list">
-              {isHistoryLoading ? (
-                <div className="sidebar-state">Loading history...</div>
-              ) : historyItems.length ? (
-                historyItems.map((scan) => (
-                  <div
-                    key={scan.id}
-                    className={`sidebar-history-row ${selectedHistoryId === scan.id ? 'active' : ''} ${openMenuId === scan.id ? 'menu-open' : ''}`}
-                  >
-                    <button
-                      className={`sidebar-item sidebar-item-main ${selectedHistoryId === scan.id ? 'active' : ''}`}
-                      onClick={() => handleOpenHistory(scan.id)}
-                      disabled={isOpeningHistory || historyActionLoadingId === scan.id}
-                    >
-                      <MessageSquare size={15} />
-                      <span>{scan.title || `Scan ${scan.id}`}</span>
-                    </button>
-
-                    <div className="sidebar-item-actions">
-                      <button
-                        type="button"
-                        className="sidebar-icon-button"
-                        onClick={(e) => handleToggleMenu(e, scan.id)}
-                        disabled={historyActionLoadingId === scan.id}
-                      >
-                        <MoreHorizontal size={14} />
-                      </button>
-
-                      {openMenuId === scan.id ? (
-                        <div
-                          className="sidebar-context-menu"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            className="sidebar-context-item danger"
-                            onClick={(e) => handleRequestDeleteScan(e, scan)}
-                          >
-                            <Trash2 size={14} />
-                            <span>Delete</span>
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="sidebar-state">No saved analyses yet.</div>
-              )}
-            </div>
-
-            {historyError ? <div className="sidebar-error">{historyError}</div> : null}
-          </div>
         </div>
 
         <div className="sidebar-bottom">
@@ -391,42 +426,6 @@ export default function Home() {
                   {isDeletingAllHistory ? 'Deleting...' : 'Delete all history'}
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {deleteTarget ? (
-        <div className="settings-modal-backdrop" onClick={() => setDeleteTarget(null)}>
-          <div
-            className="delete-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="delete-modal-body">
-              <h2>Delete history?</h2>
-              <p>
-                This will delete <strong>{deleteTarget.title || `Scan ${deleteTarget.id}`}</strong>.
-              </p>
-            </div>
-
-            <div className="delete-modal-actions">
-              <button
-                type="button"
-                className="delete-cancel-button button-secondary"
-                onClick={() => setDeleteTarget(null)}
-                disabled={historyActionLoadingId === deleteTarget.id}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                className="delete-confirm-button button-dark"
-                onClick={handleConfirmDeleteScan}
-                disabled={historyActionLoadingId === deleteTarget.id}
-              >
-                {historyActionLoadingId === deleteTarget.id ? 'Deleting...' : 'Delete'}
-              </button>
             </div>
           </div>
         </div>
