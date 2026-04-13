@@ -12,11 +12,35 @@ const API_BASE = (() => {
 const WORD_TYPE_DELAY_MS = 110
 const COLLAPSE_THRESHOLD = 10
 
-function buildInitialAgentMessage(result) {
+function buildInitialAgentMessage(result, prevScan) {
   const infectedCount = result?.infected_points?.length ?? 0
   const riskBand = result?.report?.summary?.risk_band ?? 'unknown'
+  const riskScore = Number(result?.report?.summary?.average_risk_score ?? 0)
+  const riskPercent = `${(riskScore * 100).toFixed(1)}%`
 
-  return `I detected ${infectedCount} infected tree(s) with an overall ${riskBand} risk rating. I have cross-referenced your YOLO scan results with live environmental data to produce this assessment. What would you like to know?`
+  if (!prevScan) {
+    return `I detected ${infectedCount} infected tree(s) with an overall ${riskBand} risk rating (${riskPercent}). This is the first scan for this land — I've set this as your baseline. What would you like to know?`
+  }
+
+  const prevScore = Number(prevScan.avg_risk_score ?? 0)
+  const prevPercent = `${(prevScore * 100).toFixed(1)}%`
+  const prevInfected = prevScan.infected_count ?? 0
+  const change = riskScore - prevScore
+
+  const trendText = change > 0.01
+    ? `up from ${prevPercent} last scan`
+    : change < -0.01
+      ? `down from ${prevPercent} last scan`
+      : `stable compared to last scan (${prevPercent})`
+
+  const infectedChange = infectedCount - prevInfected
+  const infectedText = infectedChange > 0
+    ? `, with ${infectedChange} more infected tree(s) than last scan`
+    : infectedChange < 0
+      ? `, with ${Math.abs(infectedChange)} fewer infected tree(s) than last scan`
+      : ', with the same number of infected trees as last scan'
+
+  return `I detected ${infectedCount} infected tree(s) with an overall ${riskBand} risk rating (${riskPercent}) — ${trendText}${infectedText}. What would you like to know?`
 }
 
 function getSuggestedQuestions(result) {
@@ -76,15 +100,15 @@ function EarlierMessagesDivider({ expanded, hiddenCount, onToggle }) {
   )
 }
 
-export default function AgentChat({ result }) {
+export default function AgentChat({ result, prevScan }) {
   const suggestedQuestions = useMemo(
     () => getSuggestedQuestions(result),
     [result?.history_id, result?.suggested_questions]
   )
   const currentScanPayload = useMemo(() => buildCurrentScanPayload(result), [result])
   const initialMessage = useMemo(
-    () => ({ role: 'agent', text: buildInitialAgentMessage(result) }),
-    [result?.history_id, result?.infected_points?.length, result?.report?.summary?.risk_band]
+    () => ({ role: 'agent', text: buildInitialAgentMessage(result, prevScan) }),
+    [result?.history_id, result?.infected_points?.length, result?.report?.summary?.risk_band, prevScan]
   )
 
   const [messages, setMessages] = useState([initialMessage])

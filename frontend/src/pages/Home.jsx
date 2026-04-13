@@ -7,6 +7,7 @@ import {
   Home as HomeIcon,
   LoaderCircle,
   MapPinned,
+  MoreHorizontal,
   Plus,
   Settings,
   User,
@@ -17,8 +18,11 @@ import AgentChat from '../services/AgentChat'
 import AgentStream from '../services/AgentStream'
 import {
   deleteAllHistoryScans,
+  deleteLand,
   fetchHistory,
+  fetchHistoryScan,
   fetchLands,
+  fetchLandScans,
   predictScan,
   renameLand,
 } from '../services/api'
@@ -54,6 +58,16 @@ export default function Home() {
   const [landNameInput, setLandNameInput] = useState('')
   const [isSavingLandName, setIsSavingLandName] = useState(false)
   const [landNameSaved, setLandNameSaved] = useState(false)
+  const [landMenuOpenId, setLandMenuOpenId] = useState(null)
+  const [renamingLandId, setRenamingLandId] = useState(null)
+  const [renamingLandValue, setRenamingLandValue] = useState('')
+  const [isDeletingLandId, setIsDeletingLandId] = useState(null)
+  const [deleteConfirmLandId, setDeleteConfirmLandId] = useState(null)
+  const [landScans, setLandScans] = useState([])
+  const [isLandScansLoading, setIsLandScansLoading] = useState(false)
+  const [selectedScanId, setSelectedScanId] = useState(null)
+  const [selectedScanResult, setSelectedScanResult] = useState(null)
+  const [isLoadingScan, setIsLoadingScan] = useState(false)
 
   const loadLands = async () => {
     try {
@@ -84,6 +98,36 @@ export default function Home() {
     loadHistory()
   }, [])
 
+  useEffect(() => {
+    const handleWindowClick = () => setLandMenuOpenId(null)
+    window.addEventListener('click', handleWindowClick)
+    return () => window.removeEventListener('click', handleWindowClick)
+  }, [])
+
+  useEffect(() => {
+    if (selectedLandId === null) {
+      setLandScans([])
+      setSelectedScanId(null)
+      setSelectedScanResult(null)
+      return
+    }
+
+    const load = async () => {
+      try {
+        setIsLandScansLoading(true)
+        const response = await fetchLandScans(selectedLandId)
+        const scans = (response.scans || []).reverse()
+        setLandScans(scans)
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setIsLandScansLoading(false)
+      }
+    }
+
+    load()
+  }, [selectedLandId])
+
   const resetToNewAnalysis = () => {
     setActiveView('home')
     setAgentStreamData(null)
@@ -93,6 +137,8 @@ export default function Home() {
     setLandNameInput('')
     setLandNameSaved(false)
     setSelectedLandId(null)
+    setSelectedScanId(null)
+    setSelectedScanResult(null)
     setIsAddingLand(true)
     setError('')
     setIsLoading(false)
@@ -105,6 +151,8 @@ export default function Home() {
       setError('')
       setCurrentResult(null)
       setSelectedLandId(null)
+      setSelectedScanId(null)
+      setSelectedScanResult(null)
       setAgentStreamData(null)
       setShowAgentStream(false)
 
@@ -116,6 +164,13 @@ export default function Home() {
       setAgentStreamData(result)
       setShowAgentStream(true)
       setLandNameSaved(false)
+
+      if (result?.land_id) {
+        const scansResponse = await fetchLandScans(result.land_id)
+        setLandScans((scansResponse.scans || []).reverse())
+      } else {
+        setLandScans([])
+      }
 
       await loadLands()
       const landId = result?.land_id ?? null
@@ -175,14 +230,48 @@ export default function Home() {
     }
   }
 
+  const handleRenameLand = async (landId) => {
+    if (!renamingLandValue.trim()) return
+    try {
+      await renameLand(landId, renamingLandValue.trim())
+      await loadLands()
+      setRenamingLandId(null)
+      setRenamingLandValue('')
+      setLandMenuOpenId(null)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const handleDeleteLand = async (landId) => {
+    try {
+      setIsDeletingLandId(landId)
+      await deleteLand(landId)
+      await loadLands()
+      setDeleteConfirmLandId(null)
+      setLandMenuOpenId(null)
+      if (selectedLandId === landId) setSelectedLandId(null)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsDeletingLandId(null)
+    }
+  }
+
   const goHome = () => {
     setActiveView('home')
     setSelectedLandId(null)
+    setSelectedScanId(null)
+    setSelectedScanResult(null)
     setIsAddingLand(false)
     setCurrentResult(null)
     setNewLandId(null)
     setLandNameInput('')
     setLandNameSaved(false)
+    setLandMenuOpenId(null)
+    setRenamingLandId(null)
+    setRenamingLandValue('')
+    setDeleteConfirmLandId(null)
     setAgentStreamData(null)
     setShowAgentStream(false)
     setError('')
@@ -237,6 +326,151 @@ export default function Home() {
     }
 
     return { label: 'Low', icon: '🟢', className: 'low' }
+  }
+
+  const buildScanComparison = (scans, currentScanId) => {
+    if (!scans || scans.length === 0) return null
+
+    const orderedScans = [...scans].reverse()
+    const currentIndex = orderedScans.findIndex((scan) => scan.id === currentScanId)
+    if (currentIndex === -1) return null
+
+    const first = orderedScans[0]
+    const current = orderedScans[currentIndex]
+    const previous = currentIndex > 0 ? orderedScans[currentIndex - 1] : null
+
+    const toPercent = (val) => {
+      const n = Number(val ?? 0)
+      return `${(n * 100).toFixed(1)}%`
+    }
+
+    const getRiskClass = (val) => {
+      const n = Number(val ?? 0)
+      if (n >= 0.66) return 'high'
+      if (n >= 0.33) return 'medium'
+      return 'low'
+    }
+
+    return {
+      first,
+      previous,
+      current,
+      toPercent,
+      getRiskClass,
+      isFirstScan: currentIndex === 0,
+      isSecondScan: currentIndex === 1,
+    }
+  }
+
+  const getPrevScan = (scans, currentId) => {
+    if (!scans || scans.length === 0) return null
+    const currentIndex = scans.findIndex((scan) => scan.id === currentId)
+    if (currentIndex <= 0) return null
+    return scans[currentIndex - 1]
+  }
+
+  const handleSelectScan = async (scanId) => {
+    try {
+      setIsLoadingScan(true)
+      setSelectedScanId(scanId)
+      const response = await fetchHistoryScan(scanId)
+      const scan = response.scan
+      const payload = scan?.payload ?? {}
+      setCurrentResult(null)
+      setSelectedScanResult({ ...payload, history_id: scan.id, land_id: scan.land_id })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoadingScan(false)
+    }
+  }
+
+  const ScanComparisonBar = ({ scans, currentScanId }) => {
+    const data = buildScanComparison(scans, currentScanId)
+    if (!data) return null
+
+    const { first, previous, current, toPercent, getRiskClass, isFirstScan, isSecondScan } = data
+
+    if (isFirstScan) {
+      return (
+        <div className="scan-comparison-bar baseline">
+          <span className="scan-comparison-label">
+            This is the first scan for this land - baseline established.
+          </span>
+        </div>
+      )
+    }
+
+    if (isSecondScan) {
+      return (
+        <div className="scan-comparison-bar">
+          <div className="scan-comparison-point">
+            <span className="scan-comparison-point-label">First Scan</span>
+            <span className={`scan-comparison-score ${getRiskClass(first.avg_risk_score)}`}>
+              {toPercent(first.avg_risk_score)}
+            </span>
+            <span className="scan-comparison-date">{formatRelativeTime(first.timestamp)}</span>
+          </div>
+          <div className="scan-comparison-arrow">{'->'}</div>
+          <div className="scan-comparison-point current">
+            <span className="scan-comparison-point-label">Now</span>
+            <span className={`scan-comparison-score ${getRiskClass(current.avg_risk_score)}`}>
+              {toPercent(current.avg_risk_score)}
+            </span>
+            <span className="scan-comparison-date">{formatRelativeTime(current.timestamp)}</span>
+          </div>
+        </div>
+      )
+    }
+
+    const change =
+      Number(current.avg_risk_score ?? 0) - Number(previous.avg_risk_score ?? 0)
+    const changeLabel =
+      change > 0
+        ? `+${(change * 100).toFixed(1)}%`
+        : change < 0
+          ? `${(change * 100).toFixed(1)}%`
+          : 'No change'
+
+    return (
+      <div className="scan-comparison-bar">
+        <div className="scan-comparison-point">
+          <span className="scan-comparison-point-label">First Scan</span>
+          <span className={`scan-comparison-score ${getRiskClass(first.avg_risk_score)}`}>
+            {toPercent(first.avg_risk_score)}
+          </span>
+          <span className="scan-comparison-date">{formatRelativeTime(first.timestamp)}</span>
+        </div>
+        <div className="scan-comparison-arrow">{'->'}</div>
+        <div className="scan-comparison-point">
+          <span className="scan-comparison-point-label">Last Scan</span>
+          <span className={`scan-comparison-score ${getRiskClass(previous.avg_risk_score)}`}>
+            {toPercent(previous.avg_risk_score)}
+          </span>
+          <span className="scan-comparison-date">{formatRelativeTime(previous.timestamp)}</span>
+        </div>
+        <div className="scan-comparison-arrow">{'->'}</div>
+        <div className="scan-comparison-point current">
+          <span className="scan-comparison-point-label">Now</span>
+          <span className={`scan-comparison-score ${getRiskClass(current.avg_risk_score)}`}>
+            {toPercent(current.avg_risk_score)}
+          </span>
+          <span className="scan-comparison-date">{formatRelativeTime(current.timestamp)}</span>
+          <span className={`scan-comparison-change ${change > 0 ? 'up' : change < 0 ? 'down' : ''}`}>
+            {changeLabel}
+          </span>
+        </div>
+        <div className="scan-comparison-history">
+          <button
+            type="button"
+            className="button-secondary scan-comparison-history-btn"
+            onClick={() => setSelectedScanResult(null)}
+          >
+            {'View full history ->'}
+          </button>
+        </div>
+      </div>
+    )
   }
 
   const renderMainContent = () => {
@@ -327,12 +561,53 @@ export default function Home() {
                 </div>
               ) : null}
 
+              <ScanComparisonBar scans={landScans} currentScanId={currentResult.history_id} />
               <SimpleResultsView result={currentResult} />
             </div>
 
             <aside className="analysis-results-chat">
               <div className="analysis-results-chat-inner">
-                <AgentChat result={currentResult} />
+                <AgentChat
+                  result={currentResult}
+                  prevScan={getPrevScan(landScans, currentResult?.history_id)}
+                />
+              </div>
+            </aside>
+          </div>
+        </section>
+      )
+    }
+
+    if (selectedScanResult && selectedLandId !== null) {
+      return (
+        <section className="dashboard-page">
+          <div className="scan-result-topbar">
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={() => {
+                setSelectedScanResult(null)
+                setSelectedScanId(null)
+              }}
+            >
+              {'<- Back to Land'}
+            </button>
+          </div>
+
+          <ScanComparisonBar scans={landScans} currentScanId={selectedScanResult.history_id} />
+
+          <div className="analysis-results-shell">
+            <div className="analysis-results-main">
+              <ScanComparisonBar scans={landScans} currentScanId={selectedScanResult.history_id} />
+              <SimpleResultsView result={selectedScanResult} />
+            </div>
+
+            <aside className="analysis-results-chat">
+              <div className="analysis-results-chat-inner">
+                <AgentChat
+                  result={selectedScanResult}
+                  prevScan={getPrevScan(landScans, selectedScanResult?.history_id)}
+                />
               </div>
             </aside>
           </div>
@@ -343,19 +618,6 @@ export default function Home() {
     if (isAddingLand) {
       return (
         <section className="dashboard-page upload-page">
-          <div className="upload-page-topbar">
-            <button
-              type="button"
-              className="button-secondary upload-back-button"
-              onClick={() => {
-                setIsAddingLand(false)
-                setError('')
-              }}
-            >
-              {'<- Back'}
-            </button>
-          </div>
-
           <div className="dashboard-page-header upload-page-header">
             <p className="dashboard-page-label">Palm Oil Disease Analysis</p>
             <h1 className="dashboard-page-title">From detection to decision in one scan</h1>
@@ -381,20 +643,96 @@ export default function Home() {
 
       return (
         <section className="dashboard-page lands-page">
-          <div className="land-detail-placeholder">
+          <div className="land-detail-header">
             <button
               type="button"
               className="button-secondary land-detail-back"
-              onClick={() => setSelectedLandId(null)}
+              onClick={() => {
+                setSelectedLandId(null)
+                setSelectedScanId(null)
+              }}
             >
               {'<- Back'}
             </button>
-            <p className="dashboard-page-label">Plantation land</p>
-            <h1 className="dashboard-page-title">
-              {selectedLand?.name || 'Unnamed Land'}
-            </h1>
-            <p className="dashboard-page-description">Land Detail - coming in next step</p>
+
+            <div className="land-detail-title-row">
+              <div>
+                <p className="dashboard-page-label">Plantation Land</p>
+                <h1 className="dashboard-page-title">
+                  {selectedLand?.name || 'Unnamed Land'}
+                </h1>
+              </div>
+
+              <button
+                type="button"
+                className="button-dark land-detail-new-scan"
+                onClick={() => {
+                  setIsAddingLand(true)
+                  setSelectedLandId(null)
+                  setSelectedScanId(null)
+                }}
+              >
+                <Plus size={16} />
+                <span>New Scan</span>
+              </button>
+            </div>
           </div>
+
+          {isLandScansLoading || isLoadingScan ? (
+            <div className="land-scans-loading">
+              <LoaderCircle className="history-loading-icon" />
+              <p>{isLoadingScan ? 'Opening scan...' : 'Loading scans...'}</p>
+            </div>
+          ) : landScans.length === 0 ? (
+            <div className="land-scans-empty">
+              <p>No scans yet for this land.</p>
+              <button
+                type="button"
+                className="button-dark land-detail-new-scan"
+                onClick={() => {
+                  setIsAddingLand(true)
+                  setSelectedLandId(null)
+                  setSelectedScanId(null)
+                }}
+              >
+                <Plus size={16} />
+                <span>Upload First Scan</span>
+              </button>
+            </div>
+          ) : (
+            <div className="land-scans-list">
+              {landScans.map((scan, index) => {
+                const riskScore = Number(scan.avg_risk_score ?? 0)
+                const riskLabel = riskScore >= 0.66 ? 'High' : riskScore >= 0.33 ? 'Medium' : 'Low'
+                const riskIcon = riskScore >= 0.66 ? '🔴' : riskScore >= 0.33 ? '🟡' : '🟢'
+                const riskClass = riskScore >= 0.66 ? 'high' : riskScore >= 0.33 ? 'medium' : 'low'
+                const scanNumber = landScans.length - index
+
+                return (
+                  <button
+                    key={scan.id}
+                    type="button"
+                    className={`land-scan-card ${selectedScanId === scan.id ? 'active' : ''}`}
+                    onClick={() => handleSelectScan(scan.id)}
+                    disabled={isLoadingScan}
+                  >
+                    <div className="land-scan-card-left">
+                      <span className="land-scan-number">{`Scan #${scanNumber}`}</span>
+                      <span className="land-scan-title">{scan.title}</span>
+                    </div>
+                    <div className="land-scan-card-right">
+                      <span className={`land-risk-badge ${riskClass}`}>
+                        {riskIcon} {riskLabel}
+                      </span>
+                      <span className="land-scan-meta">
+                        {scan.infected_count} infected · {formatRelativeTime(scan.timestamp)}
+                      </span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </section>
       )
     }
@@ -455,29 +793,112 @@ export default function Home() {
             const landName = land.name || 'Unnamed Land'
 
             return (
-              <button
+              <div
                 key={land.id}
-                type="button"
                 className="land-card"
-                onClick={() => setSelectedLandId(land.id)}
               >
                 <div className="land-card-title-row">
                   <div className="land-card-title-wrap">
-                    <MapPinned size={18} />
-                    <span className={`land-card-title ${land.name ? '' : 'untitled'}`}>
-                      {landName}
-                    </span>
+                    <button
+                      type="button"
+                      className="land-card-main"
+                      onClick={() => setSelectedLandId(land.id)}
+                    >
+                      <MapPinned size={18} />
+                      {renamingLandId === land.id ? (
+                        <div className="land-rename-row" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            className="land-rename-input"
+                            value={renamingLandValue}
+                            onChange={(e) => setRenamingLandValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleRenameLand(land.id)
+                              if (e.key === 'Escape') {
+                                setRenamingLandId(null)
+                                setRenamingLandValue('')
+                              }
+                            }}
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            className="button-dark land-rename-save"
+                            onClick={() => handleRenameLand(land.id)}
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            className="button-secondary land-rename-cancel"
+                            onClick={() => {
+                              setRenamingLandId(null)
+                              setRenamingLandValue('')
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <span className={`land-card-title ${land.name ? '' : 'untitled'}`}>
+                          {land.name || 'Unnamed Land'}
+                        </span>
+                      )}
+                    </button>
                   </div>
-                  <span className={`land-risk-badge ${riskMeta.className}`}>
-                    {riskMeta.icon} {riskMeta.label}
-                  </span>
+                  <div className="land-card-actions">
+                    <span className={`land-risk-badge ${riskMeta.className}`}>
+                      {riskMeta.icon} {riskMeta.label}
+                    </span>
+                    <button
+                      type="button"
+                      className="land-menu-button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setLandMenuOpenId((current) => (current === land.id ? null : land.id))
+                      }}
+                    >
+                      <MoreHorizontal size={16} />
+                    </button>
+
+                    {landMenuOpenId === land.id ? (
+                      <div className="land-context-menu" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="land-context-item"
+                          onClick={() => {
+                            setRenamingLandId(land.id)
+                            setRenamingLandValue(land.name || '')
+                            setLandMenuOpenId(null)
+                          }}
+                        >
+                          Rename
+                        </button>
+                        <button
+                          type="button"
+                          className="land-context-item danger"
+                          onClick={() => {
+                            setDeleteConfirmLandId(land.id)
+                            setLandMenuOpenId(null)
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
 
-                <div className="land-card-meta">
+                <button
+                  type="button"
+                  className="land-card-main land-card-meta-button"
+                  onClick={() => setSelectedLandId(land.id)}
+                >
+                  <div className="land-card-meta">
                   <span>{land.scan_count || 0} scans</span>
                   <span>Last scan: {formatRelativeTime(land.last_scan_at)}</span>
-                </div>
-              </button>
+                  </div>
+                </button>
+              </div>
             )
           })}
         </div>
@@ -585,6 +1006,35 @@ export default function Home() {
                   {isDeletingAllHistory ? 'Deleting...' : 'Delete all history'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteConfirmLandId ? (
+        <div className="settings-modal-backdrop" onClick={() => setDeleteConfirmLandId(null)}>
+          <div className="delete-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="delete-modal-body">
+              <h2>Delete this land?</h2>
+              <p>This will permanently delete the land and all its scan history. This cannot be undone.</p>
+            </div>
+            <div className="delete-modal-actions">
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={() => setDeleteConfirmLandId(null)}
+                disabled={!!isDeletingLandId}
+              >
+                Cancel
+              </button>
+              <button
+                className="button-dark delete-confirm-button"
+                type="button"
+                onClick={() => handleDeleteLand(deleteConfirmLandId)}
+                disabled={!!isDeletingLandId}
+              >
+                {isDeletingLandId ? 'Deleting...' : 'Delete'}
+              </button>
             </div>
           </div>
         </div>

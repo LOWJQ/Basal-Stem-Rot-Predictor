@@ -6,6 +6,7 @@ export default function UploadSection({ onAnalyze, isLoading, error }) {
   const fileInputRef = useRef(null)
   const [dragActive, setDragActive] = useState(false)
   const [extracting, setExtracting] = useState(false)
+  const [pendingEntry, setPendingEntry] = useState(null)
 
   const openFilePicker = () => {
     if (fileInputRef.current) {
@@ -26,7 +27,7 @@ export default function UploadSection({ onAnalyze, isLoading, error }) {
     setExtracting(false)
 
     if (!entries.length) return
-    onAnalyze(entries[0])
+    setPendingEntry(entries[0])
   }
 
   const handleFileChange = (event) => {
@@ -57,6 +58,88 @@ export default function UploadSection({ onAnalyze, isLoading, error }) {
   }
 
   const busy = isLoading || extracting
+
+  if (pendingEntry) {
+    return (
+      <div className="upload-container">
+        <div className="upload-shell">
+          <div className="exif-confirm-card">
+            <p className="exif-confirm-label">Image ready for analysis</p>
+            <p className="exif-confirm-filename">{pendingEntry.file.name}</p>
+
+            <div className="exif-confirm-preview">
+              <img
+                src={pendingEntry.preview}
+                alt={pendingEntry.file.name}
+                className="exif-confirm-preview-img"
+              />
+            </div>
+
+            <div className="exif-confirm-fields">
+              <div className="exif-field">
+                <label>Latitude</label>
+                <input
+                  type="text"
+                  value={pendingEntry.lat ?? ''}
+                  onChange={(e) => setPendingEntry({ ...pendingEntry, lat: e.target.value })}
+                  placeholder="Not detected"
+                />
+              </div>
+              <div className="exif-field">
+                <label>Longitude</label>
+                <input
+                  type="text"
+                  value={pendingEntry.lon ?? ''}
+                  onChange={(e) => setPendingEntry({ ...pendingEntry, lon: e.target.value })}
+                  placeholder="Not detected"
+                />
+              </div>
+              <div className="exif-field">
+                <label>Altitude (m)</label>
+                <input
+                  type="text"
+                  value={pendingEntry.altitude ?? ''}
+                  onChange={(e) => setPendingEntry({ ...pendingEntry, altitude: e.target.value })}
+                  placeholder="Not detected"
+                />
+              </div>
+            </div>
+
+            {pendingEntry.exifFound ? (
+              <p className="exif-confirm-note">
+                GPS data extracted from image. You may edit if needed.
+              </p>
+            ) : (
+              <p className="exif-confirm-note warn">
+                No GPS data found. You may enter coordinates manually.
+              </p>
+            )}
+
+            <div className="exif-confirm-actions">
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={() => setPendingEntry(null)}
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+              <button
+                className="button-dark exif-confirm-submit"
+                type="button"
+                onClick={() => onAnalyze(pendingEntry)}
+                disabled={isLoading}
+              >
+                {isLoading ? 'Analysing...' : 'Run Analysis'}
+              </button>
+            </div>
+          </div>
+
+          {error ? <div className="error-message">{error}</div> : null}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="upload-container">
