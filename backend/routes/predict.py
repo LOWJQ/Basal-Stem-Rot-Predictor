@@ -9,6 +9,7 @@ import numpy as np
 from flask import Blueprint, jsonify, request
 
 from services.database import get_plot_history
+from services.database import get_scan
 from services.database import save_scan
 from services.env_interpolation import (
     apply_infection_env_variation,
@@ -302,7 +303,11 @@ def predict():
             device_id=device_id,
         )
 
+        scan = get_scan(scan_id)
+        land_id = scan.get("land_id") if scan else None
+
         response_data["history_id"] = scan_id
+        response_data["land_id"] = land_id
         response_data["title"] = default_title
 
         submit_simulation_frame_render(scan_id)

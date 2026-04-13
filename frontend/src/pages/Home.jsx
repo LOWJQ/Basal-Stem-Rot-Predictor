@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react'
 import {
+  BarChart2,
+  CreditCard,
+  FileText,
+  HelpCircle,
+  Home as HomeIcon,
   LoaderCircle,
-  Settings,
   MapPinned,
   Plus,
+  Settings,
+  User,
 } from 'lucide-react'
 import UploadSection from '../services/UploadSection'
 import SimpleResultsView from '../services/SimpleResultsView'
@@ -14,6 +20,7 @@ import {
   fetchHistory,
   fetchLands,
   predictScan,
+  renameLand,
 } from '../services/api'
 
 function buildAnalysisFormData(entry) {
@@ -36,12 +43,17 @@ export default function Home() {
   const [lands, setLands] = useState([])
   const [selectedLandId, setSelectedLandId] = useState(null)
   const [isAddingLand, setIsAddingLand] = useState(false)
+  const [activeView, setActiveView] = useState('home')
   const [currentResult, setCurrentResult] = useState(null)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isDeletingAllHistory, setIsDeletingAllHistory] = useState(false)
   const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState(false)
   const [agentStreamData, setAgentStreamData] = useState(null)
   const [showAgentStream, setShowAgentStream] = useState(false)
+  const [newLandId, setNewLandId] = useState(null)
+  const [landNameInput, setLandNameInput] = useState('')
+  const [isSavingLandName, setIsSavingLandName] = useState(false)
+  const [landNameSaved, setLandNameSaved] = useState(false)
 
   const loadLands = async () => {
     try {
@@ -73,9 +85,13 @@ export default function Home() {
   }, [])
 
   const resetToNewAnalysis = () => {
+    setActiveView('home')
     setAgentStreamData(null)
     setShowAgentStream(false)
     setCurrentResult(null)
+    setNewLandId(null)
+    setLandNameInput('')
+    setLandNameSaved(false)
     setSelectedLandId(null)
     setIsAddingLand(true)
     setError('')
@@ -84,6 +100,7 @@ export default function Home() {
 
   const handleAnalyzeImage = async (entry) => {
     try {
+      setActiveView('home')
       setIsLoading(true)
       setError('')
       setCurrentResult(null)
@@ -98,8 +115,24 @@ export default function Home() {
       setIsAddingLand(false)
       setAgentStreamData(result)
       setShowAgentStream(true)
+      setLandNameSaved(false)
 
       await loadLands()
+      const landId = result?.land_id ?? null
+      if (landId) {
+        const updatedLands = await fetchLands()
+        const matchedLand = (updatedLands.lands || []).find((land) => land.id === landId)
+        setLands(updatedLands.lands || [])
+        if (matchedLand && !matchedLand.name) {
+          setNewLandId(landId)
+          setLandNameInput('')
+          setLandNameSaved(false)
+        } else {
+          setNewLandId(null)
+        }
+      } else {
+        setNewLandId(null)
+      }
       await loadHistory()
     } catch (err) {
       setError(err.message || 'Analysis failed. Please try again.')
@@ -124,6 +157,35 @@ export default function Home() {
     } finally {
       setIsDeletingAllHistory(false)
     }
+  }
+
+  const handleSaveLandName = async () => {
+    if (!landNameInput.trim() || !newLandId) return
+
+    try {
+      setIsSavingLandName(true)
+      await renameLand(newLandId, landNameInput.trim())
+      await loadLands()
+      setLandNameSaved(true)
+      setNewLandId(null)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsSavingLandName(false)
+    }
+  }
+
+  const goHome = () => {
+    setActiveView('home')
+    setSelectedLandId(null)
+    setIsAddingLand(false)
+    setCurrentResult(null)
+    setNewLandId(null)
+    setLandNameInput('')
+    setLandNameSaved(false)
+    setAgentStreamData(null)
+    setShowAgentStream(false)
+    setError('')
   }
 
   const formatRelativeTime = (value) => {
@@ -178,6 +240,34 @@ export default function Home() {
   }
 
   const renderMainContent = () => {
+    if (activeView === 'analytics') {
+      return (
+        <section className="dashboard-page">
+          <div className="dashboard-page-header dashboard-page-header-left">
+            <p className="dashboard-page-label">Insights</p>
+            <h1 className="dashboard-page-title">Analytics</h1>
+            <p className="dashboard-page-description">
+              Scan trends and plantation health summary - coming soon.
+            </p>
+          </div>
+        </section>
+      )
+    }
+
+    if (activeView === 'reports') {
+      return (
+        <section className="dashboard-page">
+          <div className="dashboard-page-header dashboard-page-header-left">
+            <p className="dashboard-page-label">History</p>
+            <h1 className="dashboard-page-title">Reports</h1>
+            <p className="dashboard-page-description">
+              All past scan reports - coming soon.
+            </p>
+          </div>
+        </section>
+      )
+    }
+
     if (showAgentStream && agentStreamData) {
       return (
         <section className="dashboard-page dashboard-state-page">
@@ -203,6 +293,40 @@ export default function Home() {
         <section className="dashboard-page">
           <div className="analysis-results-shell">
             <div className="analysis-results-main">
+              {newLandId && !landNameSaved ? (
+                <div className="new-land-banner">
+                  <div className="new-land-banner-content">
+                    <MapPinned size={16} />
+                    <span>New plantation land detected at this location. Give it a name?</span>
+                  </div>
+                  <div className="new-land-banner-actions">
+                    <input
+                      className="new-land-banner-input"
+                      type="text"
+                      placeholder="e.g. Sabah North Block A"
+                      value={landNameInput}
+                      onChange={(e) => setLandNameInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveLandName()}
+                      disabled={isSavingLandName}
+                    />
+                    <button
+                      className="button-dark new-land-banner-save"
+                      onClick={handleSaveLandName}
+                      disabled={isSavingLandName || !landNameInput.trim()}
+                    >
+                      {isSavingLandName ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      className="button-secondary new-land-banner-skip"
+                      onClick={() => setNewLandId(null)}
+                      disabled={isSavingLandName}
+                    >
+                      Skip
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
               <SimpleResultsView result={currentResult} />
             </div>
 
@@ -269,7 +393,7 @@ export default function Home() {
             <h1 className="dashboard-page-title">
               {selectedLand?.name || 'Unnamed Land'}
             </h1>
-            <p className="dashboard-page-description">Land Detail — coming in next step</p>
+            <p className="dashboard-page-description">Land Detail - coming in next step</p>
           </div>
         </section>
       )
@@ -365,25 +489,60 @@ export default function Home() {
     <div className="analysis-shell">
       <aside className="sidebar">
         <div className="sidebar-top">
-          <div className="sidebar-app-brand">
-            <p className="sidebar-app-kicker">Palm oil disease analytics</p>
+          <div className="sidebar-brand">
+            <p className="sidebar-app-kicker">Palm Oil Disease Analytics</p>
             <div className="sidebar-app-name">PalmGuard AI</div>
-            <p className="sidebar-app-caption">PalmGuard AI workspace</p>
           </div>
 
-          <button className="sidebar-new button-dark" type="button" onClick={resetToNewAnalysis}>
-            <Plus size={16} />
-            <span>Add New Land</span>
-          </button>
+          <nav className="sidebar-nav">
+            <button
+              className={`sidebar-nav-item ${activeView === 'home' ? 'active' : ''}`}
+              type="button"
+              onClick={goHome}
+            >
+              <HomeIcon size={16} />
+              <span>Home</span>
+            </button>
+
+            <button
+              className={`sidebar-nav-item ${activeView === 'analytics' ? 'active' : ''}`}
+              type="button"
+              onClick={() => setActiveView('analytics')}
+            >
+              <BarChart2 size={16} />
+              <span>Analytics</span>
+            </button>
+
+            <button
+              className={`sidebar-nav-item ${activeView === 'reports' ? 'active' : ''}`}
+              type="button"
+              onClick={() => setActiveView('reports')}
+            >
+              <FileText size={16} />
+              <span>Reports</span>
+            </button>
+          </nav>
         </div>
 
-        <div className="sidebar-bottom">
+        <div className="sidebar-bottom-nav">
+          <button className="sidebar-nav-item" type="button">
+            <CreditCard size={16} />
+            <span>Billing</span>
+          </button>
+          <button className="sidebar-nav-item" type="button">
+            <User size={16} />
+            <span>Account</span>
+          </button>
+          <button className="sidebar-nav-item" type="button">
+            <HelpCircle size={16} />
+            <span>Help &amp; Support</span>
+          </button>
           <button
-            className="sidebar-item"
+            className="sidebar-nav-item"
             type="button"
             onClick={() => setIsSettingsOpen(true)}
           >
-            <Settings size={15} />
+            <Settings size={16} />
             <span>Settings</span>
           </button>
         </div>
@@ -469,3 +628,4 @@ export default function Home() {
     </div>
   )
 }
+

@@ -2812,3 +2812,125 @@ html[data-view='analysis'] #landing-page {
     margin-right: 0;
   }
 }
+
+.sidebar-brand,
+.sidebar-nav,
+.sidebar-bottom-nav {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-brand {
+  gap: 6px;
+}
+
+.sidebar-nav,
+.sidebar-bottom-nav {
+  gap: 8px;
+}
+
+.sidebar-nav-item {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sidebar-text);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.sidebar-nav-item:hover {
+  background: var(--sidebar-hover);
+  color: #ffffff;
+}
+
+.sidebar-nav-item.active {
+  background: var(--sidebar-active);
+  color: #ffffff;
+}
+
+.sidebar-bottom-nav {
+  margin-top: auto;
+  padding-top: 18px;
+  border-top: 1px solid var(--sidebar-border);
+}
+
+.dashboard-page-header-left {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.new-land-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border: 1px solid rgba(26, 58, 31, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 22px rgba(26, 58, 31, 0.06);
+}
+
+.new-land-banner-content,
+.new-land-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.new-land-banner-content {
+  color: var(--charcoal);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.new-land-banner-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.new-land-banner-input {
+  min-width: 260px;
+  padding: 10px 14px;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--charcoal);
+  font-size: 14px;
+}
+
+.new-land-banner-input:focus {
+  outline: none;
+  border-color: rgba(26, 58, 31, 0.28);
+  box-shadow: 0 0 0 3px rgba(26, 58, 31, 0.08);
+}
+
+.new-land-banner-save,
+.new-land-banner-skip {
+  min-width: 88px;
+}
+
+@media (max-width: 960px) {
+  .new-land-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .new-land-banner-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .new-land-banner-input {
+    min-width: min(100%, 320px);
+    width: 100%;
+  }
+}
